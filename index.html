@@ -126,6 +126,7 @@ input,select{font-family:inherit;font-size:16px}
 .table tr.q td:first-child{box-shadow:inset 3px 0 0 var(--volt)}
 .table .pts{font-family:'Anton';font-size:15px;color:var(--volt)}
 .pos{color:var(--muted);font-size:11px}
+.pname{color:var(--muted);font-size:10px;font-weight:500}
 
 /* Bracket */
 .bracket{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;-webkit-overflow-scrolling:touch}
@@ -183,8 +184,9 @@ input,select{font-family:inherit;font-size:16px}
 const LS_KEY = 'fifa_tracker_v1';
 const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const loadDB = () => {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || { teams: [], tournaments: [] }; }
-  catch { return { teams: [], tournaments: [] }; }
+  let d;
+  try { d = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { d = {}; }
+  return { teams: d.teams || [], players: d.players || [], tournaments: d.tournaments || [] };
 };
 const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
 
@@ -382,7 +384,11 @@ function App() {
     saveDB(next);
     return next;
   });
-  const teamsById = useMemo(() => Object.fromEntries(db.teams.map(t => [t.id, t])), [db.teams]);
+  const teamsById = useMemo(() => {
+    const playersById = Object.fromEntries(db.players.map(p => [p.id, p]));
+    return Object.fromEntries(db.teams.map(t => [t.id,
+      { ...t, playerName: t.playerId && playersById[t.playerId] ? playersById[t.playerId].name : null }]));
+  }, [db.teams, db.players]);
 
   let screen, tab;
   if (hash.startsWith('#/torneo/')) {
@@ -427,9 +433,10 @@ function App() {
 function TeamTag({ id, teamsById, right }) {
   const t = teamsById[id];
   if (!t) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
+  const label = <span className="nm">{t.name}{t.playerName && <span className="pname"> · {t.playerName}</span>}</span>;
   return right
-    ? <React.Fragment><span className="nm">{t.name}</span><span>{t.emoji}</span></React.Fragment>
-    : <React.Fragment><span>{t.emoji}</span><span className="nm">{t.name}</span></React.Fragment>;
+    ? <React.Fragment>{label}<span>{t.emoji}</span></React.Fragment>
+    : <React.Fragment><span>{t.emoji}</span>{label}</React.Fragment>;
 }
 
 const fmtDate = (ts) => new Date(ts).toLocaleDateString('es-CL', { day:'numeric', month:'short' });
@@ -536,6 +543,7 @@ function TournamentsList({ db, teamsById }) {
 /* ============ EQUIPOS ============ */
 function TeamsView({ db, update }) {
   const [editing, setEditing] = useState(null); // null | {} | team
+  const [editingPlayer, setEditingPlayer] = useState(null);
   const fileRef = useRef(null);
 
   const usedIn = (teamId) => db.tournaments.some(t => t.teamIds.includes(teamId));
@@ -558,6 +566,28 @@ function TeamsView({ db, update }) {
     if (confirm('¿Eliminar equipo?')) update(d => { d.teams = d.teams.filter(t => t.id !== id); return d; });
   };
 
+  const savePlayer = (player) => {
+    update(d => {
+      if (player.id) {
+        const i = d.players.findIndex(x => x.id === player.id);
+        d.players[i] = player;
+      } else {
+        d.players.push({ ...player, id: uid() });
+      }
+      return d;
+    });
+    setEditingPlayer(null);
+  };
+
+  const removePlayer = (id) => {
+    if (confirm('¿Eliminar jugador? Sus equipos quedarán sin jugador asignado.'))
+      update(d => {
+        d.players = d.players.filter(p => p.id !== id);
+        d.teams.forEach(t => { if (t.playerId === id) t.playerId = null; });
+        return d;
+      });
+  };
+
   const exportData = () => {
     const blob = new Blob([JSON.stringify(db, null, 2)], { type:'application/json' });
     const a = document.createElement('a');
@@ -574,25 +604,51 @@ function TeamsView({ db, update }) {
         const data = JSON.parse(r.result);
         if (!data.teams || !data.tournaments) throw new Error();
         if (confirm('Esto reemplaza todos los datos actuales. ¿Continuar?'))
-          update(() => data);
+          update(() => ({ teams: data.teams || [], players: data.players || [],
+            tournaments: data.tournaments || [] }));
       } catch { alert('El archivo no es un respaldo válido.'); }
     };
     r.readAsText(f);
     e.target.value = '';
   };
 
+  const teamsOf = (pid) => db.teams.filter(t => t.playerId === pid);
+
   return (
     <React.Fragment>
-      <button className="btn primary" onClick={()=>setEditing({ name:'', emoji:'⚽' })}>+ Nuevo equipo</button>
-      <div className="section-title">Plantilla ({db.teams.length})</div>
+      <div className="section-title" style={{marginTop:0}}>Jugadores ({db.players.length})</div>
+      <button className="btn ghost" onClick={()=>setEditingPlayer({ name:'' })}>+ Nuevo jugador</button>
+      {db.players.map(p => (
+        <div className="card" key={p.id} style={{marginTop:10}}>
+          <div className="row">
+            <div style={{fontSize:24}}>🎮</div>
+            <div className="grow">
+              <div style={{fontWeight:700}}>{p.name}</div>
+              <div style={{fontSize:11,color:'var(--muted)'}}>
+                {teamsOf(p.id).length > 0
+                  ? teamsOf(p.id).map(t=>t.emoji+' '+t.name).join(' · ')
+                  : 'Sin equipos asignados'}</div>
+            </div>
+            <button className="btn ghost sm" onClick={()=>setEditingPlayer(p)}>Editar</button>
+            <button className="btn danger sm" onClick={()=>removePlayer(p.id)}>✕</button>
+          </div>
+        </div>
+      ))}
+
+      <div className="section-title">Equipos ({db.teams.length})</div>
+      <button className="btn primary" onClick={()=>setEditing({ name:'', emoji:'⚽', playerId:null })}>+ Nuevo equipo</button>
       {db.teams.length === 0 && (
         <div className="empty"><div className="big">🛡️</div><p>Sin equipos todavía.<br/>Crea al menos 2 para armar un torneo.</p></div>
       )}
       {db.teams.map(t => (
-        <div className="card" key={t.id}>
+        <div className="card" key={t.id} style={{marginTop:10}}>
           <div className="row">
             <div style={{fontSize:30}}>{t.emoji}</div>
-            <div className="grow" style={{fontWeight:700}}>{t.name}</div>
+            <div className="grow">
+              <div style={{fontWeight:700}}>{t.name}</div>
+              {t.playerId && <div style={{fontSize:11,color:'var(--muted)'}}>
+                🎮 {db.players.find(p=>p.id===t.playerId)?.name}</div>}
+            </div>
             <button className="btn ghost sm" onClick={()=>setEditing(t)}>Editar</button>
             <button className="btn danger sm" onClick={()=>removeTeam(t.id)}>✕</button>
           </div>
@@ -600,20 +656,42 @@ function TeamsView({ db, update }) {
       ))}
 
       <div className="section-title">Respaldo</div>
+      <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
+        Todos los datos viven en el almacenamiento local de este navegador. Exporta un respaldo antes de borrar datos del navegador o cambiar de dispositivo.</p>
       <div className="row">
         <button className="btn ghost sm" style={{flex:1}} onClick={exportData}>⬇ Exportar datos</button>
         <button className="btn ghost sm" style={{flex:1}} onClick={()=>fileRef.current.click()}>⬆ Importar datos</button>
         <input type="file" accept=".json" ref={fileRef} style={{display:'none'}} onChange={importData} />
       </div>
 
-      {editing && <TeamEditor team={editing} onSave={saveTeam} onClose={()=>setEditing(null)} />}
+      {editing && <TeamEditor team={editing} players={db.players} onSave={saveTeam} onClose={()=>setEditing(null)} />}
+      {editingPlayer && <PlayerEditor player={editingPlayer} onSave={savePlayer} onClose={()=>setEditingPlayer(null)} />}
     </React.Fragment>
   );
 }
 
-function TeamEditor({ team, onSave, onClose }) {
+function PlayerEditor({ player, onSave, onClose }) {
+  const [name, setName] = useState(player.name);
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h2 className="display">{player.id ? 'Editar jugador' : 'Nuevo jugador'}</h2>
+        <div className="field">
+          <label>Nombre</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Francisco" autoFocus />
+        </div>
+        <button className="btn primary" disabled={!name.trim()}
+          onClick={()=>onSave({ ...player, name: name.trim() })}>Guardar jugador</button>
+      </div>
+    </div>
+  );
+}
+
+function TeamEditor({ team, players, onSave, onClose }) {
   const [name, setName] = useState(team.name);
   const [emoji, setEmoji] = useState(team.emoji);
+  const [playerId, setPlayerId] = useState(team.playerId || '');
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={e=>e.stopPropagation()}>
@@ -624,6 +702,15 @@ function TeamEditor({ team, onSave, onClose }) {
           <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Los Galácticos" autoFocus />
         </div>
         <div className="field">
+          <label>Jugador (quién lo controla)</label>
+          <select value={playerId} onChange={e=>setPlayerId(e.target.value)}>
+            <option value="">— Sin jugador —</option>
+            {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {players.length === 0 && <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+            Crea jugadores en la sección Jugadores para asignarlos aquí.</p>}
+        </div>
+        <div className="field">
           <label>Escudo</label>
           <div className="emoji-grid">
             {SHIELDS.map(s => (
@@ -632,7 +719,7 @@ function TeamEditor({ team, onSave, onClose }) {
           </div>
         </div>
         <button className="btn primary" disabled={!name.trim()}
-          onClick={()=>onSave({ ...team, name: name.trim(), emoji })}>Guardar equipo</button>
+          onClick={()=>onSave({ ...team, name: name.trim(), emoji, playerId: playerId || null })}>Guardar equipo</button>
       </div>
     </div>
   );
@@ -803,6 +890,7 @@ function TournamentView({ t, db, update, teamsById }) {
           <div className="cup">🏆</div>
           <div className="eyebrow" style={{marginBottom:0}}>Campeón</div>
           <div className="who">{teamsById[t.champion]?.emoji} {teamsById[t.champion]?.name}</div>
+          {teamsById[t.champion]?.playerName && <div style={{fontSize:12,color:'var(--muted)'}}>🎮 {teamsById[t.champion].playerName}</div>}
         </div>
       )}
 
@@ -877,7 +965,7 @@ function StandingsTable({ teamIds, matches, teamsById, qualify = 0 }) {
       <tbody>
         {st.map((s, i) => (
           <tr key={s.id} className={qualify && i < qualify ? 'q' : ''}>
-            <td className="tname"><span className="pos">{i+1}</span> {teamsById[s.id]?.emoji} {teamsById[s.id]?.name}</td>
+            <td className="tname"><span className="pos">{i+1}</span> {teamsById[s.id]?.emoji} {teamsById[s.id]?.name}{teamsById[s.id]?.playerName && <span className="pname">· {teamsById[s.id].playerName}</span>}</td>
             <td>{s.pj}</td><td>{s.pg}</td><td>{s.pe}</td><td>{s.pp}</td>
             <td>{s.gf - s.gc > 0 ? '+' : ''}{s.gf - s.gc}</td>
             <td className="pts">{s.pts}</td>
@@ -942,7 +1030,7 @@ function BSlot({ id, m, g, win, teamsById }) {
   const t = id ? teamsById[id] : null;
   return (
     <div className={'b-slot'+(win?' win':'')+(t?'':' tbd')}>
-      {t ? <React.Fragment><span>{t.emoji}</span><span>{t.name}</span></React.Fragment> : 'Por definir'}
+      {t ? <React.Fragment><span>{t.emoji}</span><span>{t.name}{t.playerName && <span className="pname"> · {t.playerName}</span>}</span></React.Fragment> : 'Por definir'}
       {m.played && !m.bye && <span className="g">{g}</span>}
     </div>
   );
@@ -969,6 +1057,7 @@ function ScoreEditor({ match, teamsById, onSave, onClose }) {
             <div className="sb-team">
               <div className="shield">{A?.emoji}</div>
               <div className="name">{A?.name}</div>
+              {A?.playerName && <div className="pname">🎮 {A.playerName}</div>}
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gA}</div>
                 <div className="ctrl">
@@ -981,6 +1070,7 @@ function ScoreEditor({ match, teamsById, onSave, onClose }) {
             <div className="sb-team">
               <div className="shield">{B?.emoji}</div>
               <div className="name">{B?.name}</div>
+              {B?.playerName && <div className="pname">🎮 {B.playerName}</div>}
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gB}</div>
                 <div className="ctrl">

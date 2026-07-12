@@ -4,6 +4,7 @@ PWA para registrar partidos, torneos y campeones de FIFA. Single-file, sin build
 
 ## Características
 
+- **Jugadores**: registra quién controla cada equipo; aparece en tablas, llaves y marcador
 - **3 formatos de torneo**: Liga (ida o ida/vuelta), Eliminatoria directa (con penales), Grupos + Copa (estilo Mundial, 2 o 4 grupos)
 - **Sorteo automático** de fixture y llaves (algoritmo round robin + bracket con byes)
 - **Tabla de posiciones** automática (Pts, DG, GF, orden FIFA)
