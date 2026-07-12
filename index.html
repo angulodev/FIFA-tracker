@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0B140E">
+<title>FIFA Torneos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+<style>
+:root{
+  --bg:#0B140E;
+  --surface:#122019;
+  --surface2:#1A2C22;
+  --line:#24382C;
+  --volt:#C8F135;
+  --volt-dim:#8FB324;
+  --text:#EEF6EA;
+  --muted:#8CA695;
+  --danger:#F06565;
+  --gold:#F5C542;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:'Archivo',system-ui,sans-serif;min-height:100%}
+body{padding-bottom:env(safe-area-inset-bottom)}
+#root{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+h1,h2,.display{font-family:'Anton',sans-serif;letter-spacing:.02em;text-transform:uppercase}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;font-size:16px}
+::selection{background:var(--volt);color:var(--bg)}
+
+/* Layout */
+.screen{flex:1;padding:16px 16px 96px;animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 8px}
+.topbar h1{font-size:26px;color:var(--volt)}
+.topbar .sub{font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+
+/* Bottom nav */
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
+  display:flex;background:rgba(11,20,14,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+.nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-radius:12px}
+.nav button.active{color:var(--volt)}
+.nav .ico{font-size:20px;line-height:1}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.card.tap{transition:transform .1s}
+.card.tap:active{transform:scale(.985)}
+.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.section-title{font-family:'Anton';font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:20px 0 10px}
+
+/* Buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;
+  border-radius:14px;font-weight:700;font-size:15px;transition:transform .1s}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--volt);color:#0B140E}
+.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn.sm{padding:10px 14px;font-size:13px;width:auto;border-radius:10px}
+.btn:disabled{opacity:.4;pointer-events:none}
+
+/* Forms */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase}
+.field input,.field select{width:100%;padding:13px 14px;background:var(--surface2);border:1px solid var(--line);
+  border-radius:12px;color:var(--text);outline:none}
+.field input:focus,.field select:focus{border-color:var(--volt)}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:9px 14px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);
+  font-size:13px;font-weight:600;color:var(--muted)}
+.chip.on{background:var(--volt);color:#0B140E;border-color:var(--volt)}
+
+/* Scoreboard — elemento firma */
+.scoreboard{background:linear-gradient(180deg,#0E1A13,#122019);border:1px solid var(--line);
+  border-radius:18px;padding:18px 14px;position:relative;overflow:hidden}
+.scoreboard::before{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(90deg,transparent 0 38px,rgba(200,241,53,.03) 38px 76px);pointer-events:none}
+.sb-teams{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.sb-team{text-align:center}
+.sb-team .shield{font-size:34px}
+.sb-team .name{font-size:12px;font-weight:700;margin-top:4px;line-height:1.2;word-break:break-word}
+.sb-score{font-family:'Anton';font-size:52px;color:var(--volt);display:flex;align-items:center;gap:10px;
+  text-shadow:0 0 24px rgba(200,241,53,.35)}
+.sb-score .sep{color:var(--muted);font-size:30px}
+.sb-vs{font-family:'Anton';font-size:22px;color:var(--muted)}
+.sb-meta{text-align:center;font-size:11px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.sb-pens{text-align:center;font-size:12px;color:var(--gold);margin-top:6px;font-weight:700}
+
+/* Stepper del editor de marcador */
+.stepper{display:flex;flex-direction:column;align-items:center;gap:6px}
+.stepper .val{font-family:'Anton';font-size:64px;color:var(--volt);min-width:70px;text-align:center;
+  text-shadow:0 0 28px rgba(200,241,53,.4)}
+.stepper .ctrl{display:flex;gap:10px}
+.stepper .ctrl button{width:52px;height:44px;border-radius:12px;background:var(--surface2);
+  border:1px solid var(--line);font-size:22px;font-weight:700;color:var(--text)}
+.stepper .ctrl button:active{background:var(--volt);color:#0B140E}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:50;
+  display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:520px;background:var(--surface);border-radius:22px 22px 0 0;
+  border:1px solid var(--line);border-bottom:none;padding:20px 18px calc(24px + env(safe-area-inset-bottom));
+  max-height:88vh;overflow-y:auto;animation:slideUp .22s ease}
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.sheet h2{font-size:19px;margin-bottom:16px}
+.sheet-grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 14px}
+
+/* Tabla de posiciones */
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  padding:8px 4px;text-align:center;border-bottom:1px solid var(--line)}
+.table td{padding:10px 4px;text-align:center;border-bottom:1px solid var(--line)}
+.table .tname{text-align:left;font-weight:600;display:flex;align-items:center;gap:6px}
+.table tr.q td:first-child{box-shadow:inset 3px 0 0 var(--volt)}
+.table .pts{font-family:'Anton';font-size:15px;color:var(--volt)}
+.pos{color:var(--muted);font-size:11px}
+
+/* Bracket */
+.bracket{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;-webkit-overflow-scrolling:touch}
+.b-round{min-width:210px;display:flex;flex-direction:column;justify-content:space-around;gap:12px}
+.b-round-title{font-family:'Anton';font-size:12px;letter-spacing:.1em;color:var(--muted);
+  text-transform:uppercase;text-align:center;margin-bottom:2px}
+.b-match{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.b-slot{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:13px;font-weight:600}
+.b-slot+.b-slot{border-top:1px solid var(--line)}
+.b-slot .g{margin-left:auto;font-family:'Anton';font-size:16px;color:var(--muted)}
+.b-slot.win{background:rgba(200,241,53,.08)}
+.b-slot.win .g{color:var(--volt)}
+.b-slot.tbd{color:var(--muted);font-style:italic;font-weight:400}
+.b-pens{font-size:10px;color:var(--gold);padding:4px 12px 8px;text-align:right}
+
+/* Match list rows */
+.mrow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 12px;margin-bottom:10px}
+.mrow .t{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;min-width:0}
+.mrow .t span.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow .t.right{justify-content:flex-end;text-align:right}
+.mrow .mid{font-family:'Anton';font-size:19px;color:var(--volt);white-space:nowrap;padding:4px 10px;
+  background:var(--surface2);border-radius:8px;border:1px solid var(--line)}
+.mrow .mid.pend{color:var(--muted);font-size:13px;font-family:'Archivo';font-weight:700}
+.mrow-tag{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:14px 0 8px}
+
+/* Stats dashboard */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat .n{font-family:'Anton';font-size:30px;color:var(--volt)}
+.stat .l{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+
+.champ-banner{background:linear-gradient(135deg,rgba(245,197,66,.15),rgba(200,241,53,.08));
+  border:1px solid var(--gold);border-radius:16px;padding:16px;text-align:center;margin-bottom:12px}
+.champ-banner .cup{font-size:36px}
+.champ-banner .who{font-family:'Anton';font-size:22px;color:var(--gold);margin-top:4px}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty .big{font-size:44px;margin-bottom:10px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase}
+.badge.on{background:rgba(200,241,53,.15);color:var(--volt);border:1px solid var(--volt-dim)}
+.badge.done{background:rgba(245,197,66,.12);color:var(--gold);border:1px solid rgba(245,197,66,.4)}
+.row{display:flex;align-items:center;gap:10px}
+.row .grow{flex:1;min-width:0}
+.emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.emoji-grid button{font-size:24px;padding:8px 0;border-radius:10px;background:var(--surface2);border:1px solid var(--line)}
+.emoji-grid button.on{border-color:var(--volt);background:rgba(200,241,53,.12)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="env,react">
+/* ============ STORAGE ============ */
+const LS_KEY = 'fifa_tracker_v1';
+const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+const loadDB = () => {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || { teams: [], tournaments: [] }; }
+  catch { return { teams: [], tournaments: [] }; }
+};
+const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
+
+const SHIELDS = ['⚽','🦁','🐺','🦅','🐂','🐉','⚡','🔥','👑','🛡️','⭐','💀','🦈','🐆','🏴‍☠️','🚀','🎯','🥇','🌪️','🐍','🦂','🏹','⚔️','💎'];
+
+/* ============ ENGINE (puro) ============ */
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+// Round robin (algoritmo del círculo). Devuelve matches con round.
+function roundRobin(teamIds, { idaVuelta = false, stage = 'liga', group = null } = {}) {
+  const teams = [...teamIds];
+  if (teams.length % 2 !== 0) teams.push(null); // bye
+  const n = teams.length, roundsCount = n - 1, half = n / 2;
+  let arr = [...teams];
+  const matches = [];
+  for (let r = 0; r < roundsCount; r++) {
+    for (let i = 0; i < half; i++) {
+      const a = arr[i], b = arr[n - 1 - i];
+      if (a !== null && b !== null) {
+        const home = r % 2 === 0 ? a : b, away = r % 2 === 0 ? b : a;
+        matches.push({ id: uid(), stage, group, round: r + 1, teamA: home, teamB: away,
+          golesA: null, golesB: null, played: false });
+      }
+    }
+    arr = [arr[0], arr[n - 1], ...arr.slice(1, n - 1)];
+  }
+  if (idaVuelta) {
+    const vuelta = matches.map(m => ({ ...m, id: uid(), round: m.round + roundsCount,
+      teamA: m.teamB, teamB: m.teamA }));
+    return [...matches, ...vuelta];
+  }
+  return matches;
+}
+
+// Tabla de posiciones. Orden: Pts, DG, GF, nombre.
+function computeStandings(teamIds, matches, teamsById) {
+  const t = {};
+  teamIds.forEach(id => { t[id] = { id, pj:0, pg:0, pe:0, pp:0, gf:0, gc:0, pts:0 }; });
+  matches.filter(m => m.played && !m.bye).forEach(m => {
+    const A = t[m.teamA], B = t[m.teamB];
+    if (!A || !B) return;
+    A.pj++; B.pj++;
+    A.gf += m.golesA; A.gc += m.golesB;
+    B.gf += m.golesB; B.gc += m.golesA;
+    if (m.golesA > m.golesB) { A.pg++; B.pp++; A.pts += 3; }
+    else if (m.golesA < m.golesB) { B.pg++; A.pp++; B.pts += 3; }
+    else { A.pe++; B.pe++; A.pts++; B.pts++; }
+  });
+  return Object.values(t).sort((a, b) =>
+    b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf ||
+    (teamsById[a.id]?.name || '').localeCompare(teamsById[b.id]?.name || ''));
+}
+
+// Nombre de ronda según cantidad de partidos en ella.
+function roundName(matchesInRound) {
+  if (matchesInRound === 1) return 'Final';
+  if (matchesInRound === 2) return 'Semifinales';
+  if (matchesInRound === 4) return 'Cuartos';
+  if (matchesInRound === 8) return 'Octavos';
+  return `Ronda de ${matchesInRound * 2}`;
+}
+
+// Bracket eliminatorio desde lista ordenada (ya emparejada: [0]vs[1], [2]vs[3]...)
+function buildBracketFromOrdered(orderedIds) {
+  let size = 1;
+  while (size < orderedIds.length) size *= 2;
+  const numByes = size - orderedIds.length;
+  // Distribuir byes: los primeros N equipos pasan directo (nunca null vs null)
+  const slots = [];
+  orderedIds.forEach((id, i) => {
+    slots.push(id);
+    if (i < numByes) slots.push(null);
+  });
+  const matches = [];
+  const r1Count = size / 2;
+  for (let i = 0; i < r1Count; i++) {
+    matches.push({ id: uid(), stage:'ko', round: 1, index: i,
+      teamA: slots[i*2], teamB: slots[i*2+1],
+      golesA: null, golesB: null, penA: null, penB: null, played: false, bye: false });
+  }
+  let count = r1Count, round = 2;
+  while (count > 1) {
+    count = count / 2;
+    for (let i = 0; i < count; i++) {
+      matches.push({ id: uid(), stage:'ko', round, index: i, teamA: null, teamB: null,
+        golesA: null, golesB: null, penA: null, penB: null, played: false, bye: false });
+    }
+    round++;
+  }
+  // Auto-avanzar byes de ronda 1
+  matches.filter(m => m.round === 1).forEach(m => {
+    if (m.teamA && !m.teamB) { m.played = true; m.bye = true; advanceWinner(matches, m, m.teamA); }
+    else if (!m.teamA && m.teamB) { m.played = true; m.bye = true; advanceWinner(matches, m, m.teamB); }
+  });
+  return matches;
+}
+
+const buildBracket = (teamIds) => buildBracketFromOrdered(shuffle(teamIds));
+
+// Ganador de un partido KO (considera penales)
+function koWinner(m) {
+  if (!m.played) return null;
+  if (m.bye) return m.teamA || m.teamB;
+  if (m.golesA > m.golesB) return m.teamA;
+  if (m.golesB > m.golesA) return m.teamB;
+  if (m.penA != null && m.penB != null) return m.penA > m.penB ? m.teamA : m.teamB;
+  return null;
+}
+
+function maxRound(matches) { return Math.max(...matches.map(m => m.round)); }
+
+// Propaga ganador a la siguiente ronda. Devuelve true si era la final.
+function advanceWinner(matches, match, winnerId) {
+  const next = matches.find(m => m.stage === 'ko' && m.round === match.round + 1 &&
+    m.index === Math.floor(match.index / 2));
+  if (!next) return true; // era la final
+  if (match.index % 2 === 0) next.teamA = winnerId; else next.teamB = winnerId;
+  return false;
+}
+
+// Si se edita un partido KO ya jugado, limpiar rondas posteriores dependientes
+function clearDownstream(matches, match) {
+  const next = matches.find(m => m.stage === 'ko' && m.round === match.round + 1 &&
+    m.index === Math.floor(match.index / 2));
+  if (!next) return;
+  const slot = match.index % 2 === 0 ? 'teamA' : 'teamB';
+  if (next.played) clearDownstream(matches, next);
+  next[slot] = null;
+  next.played = false; next.golesA = null; next.golesB = null; next.penA = null; next.penB = null;
+}
+
+// Grupos: reparte equipos y genera round robin por grupo
+function buildGroups(teamIds, numGroups) {
+  const shuffled = shuffle(teamIds);
+  const letters = 'ABCDEFGH';
+  const groups = {};
+  for (let g = 0; g < numGroups; g++) groups[letters[g]] = [];
+  shuffled.forEach((id, i) => groups[letters[i % numGroups]].push(id));
+  let matches = [];
+  Object.entries(groups).forEach(([letter, ids]) => {
+    matches = matches.concat(roundRobin(ids, { stage: 'grupos', group: letter }));
+  });
+  return { groups, matches };
+}
+
+// Clasificados de grupos → orden de cruce estándar (1A-2B, 1B-2A / mundial con 4 grupos)
+function qualifiersOrdered(groups, matches, advancePerGroup, teamsById) {
+  const letters = Object.keys(groups).sort();
+  const tops = {};
+  letters.forEach(L => {
+    const st = computeStandings(groups[L], matches.filter(m => m.group === L), teamsById);
+    tops[L] = st.slice(0, advancePerGroup).map(s => s.id);
+  });
+  const ordered = [];
+  if (letters.length === 1) {
+    ordered.push(...tops[letters[0]]);
+  } else if (advancePerGroup === 1) {
+    letters.forEach(L => ordered.push(tops[L][0]));
+  } else {
+    // cruces 1X vs 2Y entre pares de grupos (A-B, C-D, ...)
+    for (let i = 0; i < letters.length; i += 2) {
+      const X = letters[i], Y = letters[i + 1] || letters[i];
+      ordered.push(tops[X][0], tops[Y][1], tops[Y][0], tops[X][1]);
+    }
+  }
+  return ordered.filter(Boolean);
+}
+
+/* ============ APP ============ */
+const { useState, useEffect, useMemo, useRef } = React;
+
+function useHashRoute() {
+  const [hash, setHash] = useState(window.location.hash || '#/');
+  useEffect(() => {
+    const on = () => setHash(window.location.hash || '#/');
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  return hash;
+}
+const go = (h) => { window.location.hash = h; };
+
+function App() {
+  const [db, setDb] = useState(loadDB);
+  const hash = useHashRoute();
+  const update = (fn) => setDb(prev => {
+    const next = fn(structuredClone(prev));
+    saveDB(next);
+    return next;
+  });
+  const teamsById = useMemo(() => Object.fromEntries(db.teams.map(t => [t.id, t])), [db.teams]);
+
+  let screen, tab;
+  if (hash.startsWith('#/torneo/')) {
+    const id = hash.split('/')[2];
+    const t = db.tournaments.find(x => x.id === id);
+    screen = t ? <TournamentView key={id} t={t} db={db} update={update} teamsById={teamsById} />
+               : <div className="empty"><div className="big">🤷</div>Torneo no encontrado</div>;
+    tab = 'torneos';
+  } else if (hash === '#/nuevo') {
+    screen = <NewTournament db={db} update={update} />; tab = 'torneos';
+  } else if (hash === '#/equipos') {
+    screen = <TeamsView db={db} update={update} />; tab = 'equipos';
+  } else if (hash === '#/torneos') {
+    screen = <TournamentsList db={db} teamsById={teamsById} />; tab = 'torneos';
+  } else {
+    screen = <Dashboard db={db} update={update} teamsById={teamsById} />; tab = 'inicio';
+  }
+
+  return (
+    <React.Fragment>
+      <div className="topbar">
+        <div>
+          <h1>FIFA Torneos</h1>
+          <div className="sub">Marcador · Ligas · Copas</div>
+        </div>
+        <div style={{fontSize:28}}>⚽</div>
+      </div>
+      <div className="screen">{screen}</div>
+      <nav className="nav">
+        <button className={tab==='inicio'?'active':''} onClick={()=>go('#/')}>
+          <span className="ico">🏟️</span>Inicio</button>
+        <button className={tab==='torneos'?'active':''} onClick={()=>go('#/torneos')}>
+          <span className="ico">🏆</span>Torneos</button>
+        <button className={tab==='equipos'?'active':''} onClick={()=>go('#/equipos')}>
+          <span className="ico">🛡️</span>Equipos</button>
+      </nav>
+    </React.Fragment>
+  );
+}
+
+/* ============ COMPONENTES BASE ============ */
+function TeamTag({ id, teamsById, right }) {
+  const t = teamsById[id];
+  if (!t) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
+  return right
+    ? <React.Fragment><span className="nm">{t.name}</span><span>{t.emoji}</span></React.Fragment>
+    : <React.Fragment><span>{t.emoji}</span><span className="nm">{t.name}</span></React.Fragment>;
+}
+
+const fmtDate = (ts) => new Date(ts).toLocaleDateString('es-CL', { day:'numeric', month:'short' });
+
+/* ============ DASHBOARD ============ */
+function Dashboard({ db, teamsById }) {
+  const active = db.tournaments.filter(t => t.status === 'activo');
+  const done = db.tournaments.filter(t => t.status === 'finalizado');
+  const allMatches = db.tournaments.flatMap(t => t.matches);
+  const played = allMatches.filter(m => m.played && !m.bye);
+  const goles = played.reduce((s, m) => s + m.golesA + m.golesB, 0);
+
+  // Palmarés: campeonatos por equipo
+  const cups = {};
+  done.forEach(t => { if (t.champion) cups[t.champion] = (cups[t.champion] || 0) + 1; });
+  const topChamp = Object.entries(cups).sort((a,b) => b[1]-a[1])[0];
+
+  const lastPlayed = db.tournaments.flatMap(t => t.matches.filter(m => m.played && !m.bye)
+    .map(m => ({...m, tName: t.name}))).sort((a,b) => (b.playedAt||0)-(a.playedAt||0)).slice(0,3);
+
+  return (
+    <React.Fragment>
+      <div className="stat-grid">
+        <div className="stat"><div className="n">{played.length}</div><div className="l">Partidos jugados</div></div>
+        <div className="stat"><div className="n">{goles}</div><div className="l">Goles totales</div></div>
+        <div className="stat"><div className="n">{done.length}</div><div className="l">Torneos completados</div></div>
+        <div className="stat"><div className="n">{db.teams.length}</div><div className="l">Equipos</div></div>
+      </div>
+
+      {topChamp && teamsById[topChamp[0]] && (
+        <div className="champ-banner">
+          <div className="cup">👑</div>
+          <div className="eyebrow" style={{marginBottom:0}}>Máximo campeón</div>
+          <div className="who">{teamsById[topChamp[0]].emoji} {teamsById[topChamp[0]].name}</div>
+          <div style={{fontSize:12,color:'var(--muted)'}}>{topChamp[1]} título{topChamp[1]>1?'s':''}</div>
+        </div>
+      )}
+
+      {active.length > 0 && <div className="section-title">En juego</div>}
+      {active.map(t => <TournamentCard key={t.id} t={t} teamsById={teamsById} />)}
+
+      <button className="btn primary" style={{marginTop:8}} onClick={()=>go('#/nuevo')}>
+        + Nuevo torneo</button>
+
+      {lastPlayed.length > 0 && (
+        <React.Fragment>
+          <div className="section-title">Últimos resultados</div>
+          {lastPlayed.map(m => (
+            <div className="mrow" key={m.id}>
+              <div className="t"><TeamTag id={m.teamA} teamsById={teamsById} /></div>
+              <div className="mid">{m.golesA} - {m.golesB}</div>
+              <div className="t right"><TeamTag id={m.teamB} teamsById={teamsById} right /></div>
+            </div>
+          ))}
+        </React.Fragment>
+      )}
+
+      {db.tournaments.length === 0 && db.teams.length === 0 && (
+        <div className="empty">
+          <div className="big">🏟️</div>
+          <p>El estadio está vacío.<br/>Crea tus equipos y arma el primer torneo.</p>
+        </div>
+      )}
+    </React.Fragment>
+  );
+}
+
+function TournamentCard({ t, teamsById }) {
+  const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
+  const played = t.matches.filter(m => m.played && !m.bye).length;
+  const total = t.matches.filter(m => !m.bye).length;
+  return (
+    <div className="card tap" onClick={()=>go('#/torneo/'+t.id)}>
+      <div className="row">
+        <div className="grow">
+          <div className="eyebrow">{FORMATS[t.format]} · {t.teamIds.length} equipos</div>
+          <div className="display" style={{fontSize:18}}>{t.name}</div>
+          <div style={{fontSize:12,color:'var(--muted)',marginTop:4}}>
+            {played}/{total} partidos · {fmtDate(t.createdAt)}</div>
+        </div>
+        {t.status === 'finalizado'
+          ? <span className="badge done">🏆 {teamsById[t.champion]?.name || 'Finalizado'}</span>
+          : <span className="badge on">En juego</span>}
+      </div>
+    </div>
+  );
+}
+
+function TournamentsList({ db, teamsById }) {
+  const sorted = [...db.tournaments].sort((a,b) => b.createdAt - a.createdAt);
+  return (
+    <React.Fragment>
+      <button className="btn primary" onClick={()=>go('#/nuevo')}>+ Nuevo torneo</button>
+      {sorted.length === 0
+        ? <div className="empty"><div className="big">🏆</div><p>Aún no hay torneos.<br/>Crea el primero y que ruede la pelota.</p></div>
+        : <React.Fragment>
+            <div className="section-title">Todos los torneos</div>
+            {sorted.map(t => <TournamentCard key={t.id} t={t} teamsById={teamsById} />)}
+          </React.Fragment>}
+    </React.Fragment>
+  );
+}
+
+/* ============ EQUIPOS ============ */
+function TeamsView({ db, update }) {
+  const [editing, setEditing] = useState(null); // null | {} | team
+  const fileRef = useRef(null);
+
+  const usedIn = (teamId) => db.tournaments.some(t => t.teamIds.includes(teamId));
+
+  const saveTeam = (team) => {
+    update(d => {
+      if (team.id) {
+        const i = d.teams.findIndex(x => x.id === team.id);
+        d.teams[i] = team;
+      } else {
+        d.teams.push({ ...team, id: uid() });
+      }
+      return d;
+    });
+    setEditing(null);
+  };
+
+  const removeTeam = (id) => {
+    if (usedIn(id)) { alert('Este equipo participa en torneos. No se puede eliminar.'); return; }
+    if (confirm('¿Eliminar equipo?')) update(d => { d.teams = d.teams.filter(t => t.id !== id); return d; });
+  };
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(db, null, 2)], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'fifa-torneos-backup.json';
+    a.click();
+  };
+  const importData = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        if (!data.teams || !data.tournaments) throw new Error();
+        if (confirm('Esto reemplaza todos los datos actuales. ¿Continuar?'))
+          update(() => data);
+      } catch { alert('El archivo no es un respaldo válido.'); }
+    };
+    r.readAsText(f);
+    e.target.value = '';
+  };
+
+  return (
+    <React.Fragment>
+      <button className="btn primary" onClick={()=>setEditing({ name:'', emoji:'⚽' })}>+ Nuevo equipo</button>
+      <div className="section-title">Plantilla ({db.teams.length})</div>
+      {db.teams.length === 0 && (
+        <div className="empty"><div className="big">🛡️</div><p>Sin equipos todavía.<br/>Crea al menos 2 para armar un torneo.</p></div>
+      )}
+      {db.teams.map(t => (
+        <div className="card" key={t.id}>
+          <div className="row">
+            <div style={{fontSize:30}}>{t.emoji}</div>
+            <div className="grow" style={{fontWeight:700}}>{t.name}</div>
+            <button className="btn ghost sm" onClick={()=>setEditing(t)}>Editar</button>
+            <button className="btn danger sm" onClick={()=>removeTeam(t.id)}>✕</button>
+          </div>
+        </div>
+      ))}
+
+      <div className="section-title">Respaldo</div>
+      <div className="row">
+        <button className="btn ghost sm" style={{flex:1}} onClick={exportData}>⬇ Exportar datos</button>
+        <button className="btn ghost sm" style={{flex:1}} onClick={()=>fileRef.current.click()}>⬆ Importar datos</button>
+        <input type="file" accept=".json" ref={fileRef} style={{display:'none'}} onChange={importData} />
+      </div>
+
+      {editing && <TeamEditor team={editing} onSave={saveTeam} onClose={()=>setEditing(null)} />}
+    </React.Fragment>
+  );
+}
+
+function TeamEditor({ team, onSave, onClose }) {
+  const [name, setName] = useState(team.name);
+  const [emoji, setEmoji] = useState(team.emoji);
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h2 className="display">{team.id ? 'Editar equipo' : 'Nuevo equipo'}</h2>
+        <div className="field">
+          <label>Nombre</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Los Galácticos" autoFocus />
+        </div>
+        <div className="field">
+          <label>Escudo</label>
+          <div className="emoji-grid">
+            {SHIELDS.map(s => (
+              <button key={s} className={emoji===s?'on':''} onClick={()=>setEmoji(s)}>{s}</button>
+            ))}
+          </div>
+        </div>
+        <button className="btn primary" disabled={!name.trim()}
+          onClick={()=>onSave({ ...team, name: name.trim(), emoji })}>Guardar equipo</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============ NUEVO TORNEO ============ */
+function NewTournament({ db, update }) {
+  const [name, setName] = useState('');
+  const [format, setFormat] = useState('liga');
+  const [selected, setSelected] = useState([]);
+  const [idaVuelta, setIdaVuelta] = useState(false);
+  const [numGroups, setNumGroups] = useState(2);
+
+  const toggle = (id) => setSelected(s => s.includes(id) ? s.filter(x=>x!==id) : [...s, id]);
+  const min = format === 'grupos' ? numGroups * 2 : 2;
+  const groupOptions = [2,4].filter(g => true);
+  const valid = name.trim() && selected.length >= min &&
+    (format !== 'grupos' || selected.length >= numGroups * 2);
+
+  const create = () => {
+    const t = {
+      id: uid(), name: name.trim(), format, teamIds: [...selected],
+      status: 'activo', champion: null, createdAt: Date.now(),
+      config: { idaVuelta, numGroups, advancePerGroup: 2 },
+      groups: null, matches: [], koStarted: false
+    };
+    if (format === 'liga') {
+      t.matches = roundRobin(selected, { idaVuelta });
+    } else if (format === 'eliminatoria') {
+      t.matches = buildBracket(selected);
+      t.koStarted = true;
+    } else {
+      const { groups, matches } = buildGroups(selected, numGroups);
+      t.groups = groups; t.matches = matches;
+    }
+    update(d => { d.tournaments.push(t); return d; });
+    go('#/torneo/' + t.id);
+  };
+
+  return (
+    <React.Fragment>
+      <h2 className="display" style={{fontSize:20,marginBottom:14}}>Nuevo torneo</h2>
+      <div className="field">
+        <label>Nombre del torneo</label>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Copa Rengo 2026" />
+      </div>
+      <div className="field">
+        <label>Formato</label>
+        <div className="chips">
+          <button className={'chip'+(format==='liga'?' on':'')} onClick={()=>setFormat('liga')}>Liga</button>
+          <button className={'chip'+(format==='eliminatoria'?' on':'')} onClick={()=>setFormat('eliminatoria')}>Eliminatoria</button>
+          <button className={'chip'+(format==='grupos'?' on':'')} onClick={()=>setFormat('grupos')}>Grupos + Copa</button>
+        </div>
+      </div>
+      {format === 'liga' && (
+        <div className="field">
+          <label>Vueltas</label>
+          <div className="chips">
+            <button className={'chip'+(!idaVuelta?' on':'')} onClick={()=>setIdaVuelta(false)}>Solo ida</button>
+            <button className={'chip'+(idaVuelta?' on':'')} onClick={()=>setIdaVuelta(true)}>Ida y vuelta</button>
+          </div>
+        </div>
+      )}
+      {format === 'grupos' && (
+        <div className="field">
+          <label>Grupos (clasifican 2 por grupo)</label>
+          <div className="chips">
+            <button className={'chip'+(numGroups===2?' on':'')} onClick={()=>setNumGroups(2)}>2 grupos</button>
+            <button className={'chip'+(numGroups===4?' on':'')} onClick={()=>setNumGroups(4)}>4 grupos</button>
+          </div>
+        </div>
+      )}
+      <div className="field">
+        <label>Equipos ({selected.length} seleccionados · mínimo {min})</label>
+        {db.teams.length < 2 && (
+          <div className="empty" style={{padding:'18px 10px'}}>
+            <p>Necesitas equipos primero.</p>
+            <button className="btn ghost sm" style={{marginTop:10}} onClick={()=>go('#/equipos')}>Ir a Equipos</button>
+          </div>
+        )}
+        <div className="chips">
+          {db.teams.map(t => (
+            <button key={t.id} className={'chip'+(selected.includes(t.id)?' on':'')} onClick={()=>toggle(t.id)}>
+              {t.emoji} {t.name}</button>
+          ))}
+        </div>
+      </div>
+      <button className="btn primary" disabled={!valid} onClick={create}>🎲 Sortear y crear torneo</button>
+      <p style={{fontSize:12,color:'var(--muted)',textAlign:'center',marginTop:10}}>
+        El fixture y los cruces se sortean automáticamente.</p>
+    </React.Fragment>
+  );
+}
+
+/* ============ VISTA DE TORNEO ============ */
+function TournamentView({ t, db, update, teamsById }) {
+  const isKO = t.format === 'eliminatoria';
+  const isGroups = t.format === 'grupos';
+  const defaultTab = isKO ? 'bracket' : 'partidos';
+  const [tab, setTab] = useState(defaultTab);
+  const [editMatch, setEditMatch] = useState(null);
+
+  const groupsDone = isGroups && t.matches.filter(m => m.stage==='grupos').every(m => m.played);
+
+  const saveResult = (matchId, golesA, golesB, penA, penB) => {
+    update(d => {
+      const tt = d.tournaments.find(x => x.id === t.id);
+      const m = tt.matches.find(x => x.id === matchId);
+      const wasKO = m.stage === 'ko';
+      if (wasKO && m.played) clearDownstream(tt.matches, m);
+      m.golesA = golesA; m.golesB = golesB;
+      m.penA = penA; m.penB = penB;
+      m.played = true; m.playedAt = Date.now();
+      if (wasKO) {
+        const w = koWinner(m);
+        const wasFinal = advanceWinner(tt.matches, m, w);
+        if (wasFinal) { tt.champion = w; tt.status = 'finalizado'; }
+        else if (tt.status === 'finalizado') { tt.status = 'activo'; tt.champion = null; }
+      }
+      return d;
+    });
+    setEditMatch(null);
+  };
+
+  const startKO = () => {
+    update(d => {
+      const tt = d.tournaments.find(x => x.id === t.id);
+      const ordered = qualifiersOrdered(tt.groups, tt.matches, tt.config.advancePerGroup, teamsById);
+      tt.matches = tt.matches.concat(buildBracketFromOrdered(ordered));
+      tt.koStarted = true;
+      return d;
+    });
+    setTab('bracket');
+  };
+
+  const finishLeague = () => {
+    const st = computeStandings(t.teamIds, t.matches, teamsById);
+    if (confirm(`Finalizar torneo y coronar a ${teamsById[st[0].id]?.name}?`)) {
+      update(d => {
+        const tt = d.tournaments.find(x => x.id === t.id);
+        tt.status = 'finalizado'; tt.champion = st[0].id;
+        return d;
+      });
+    }
+  };
+
+  const removeTournament = () => {
+    if (confirm('¿Eliminar este torneo y todos sus partidos? No se puede deshacer.')) {
+      update(d => { d.tournaments = d.tournaments.filter(x => x.id !== t.id); return d; });
+      go('#/torneos');
+    }
+  };
+
+  const leagueDone = t.format==='liga' && t.matches.length>0 && t.matches.every(m=>m.played);
+  const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
+  const tabs = [];
+  if (!isKO) tabs.push(['partidos','Partidos']);
+  if (t.format==='liga' || isGroups) tabs.push(['tabla', isGroups?'Grupos':'Tabla']);
+  if (isKO || (isGroups && t.koStarted)) tabs.push(['bracket','Llaves']);
+
+  return (
+    <React.Fragment>
+      <div className="eyebrow">{FORMATS[t.format]} · {t.teamIds.length} equipos · {fmtDate(t.createdAt)}</div>
+      <h2 className="display" style={{fontSize:22,marginBottom:12}}>{t.name}</h2>
+
+      {t.status === 'finalizado' && t.champion && (
+        <div className="champ-banner">
+          <div className="cup">🏆</div>
+          <div className="eyebrow" style={{marginBottom:0}}>Campeón</div>
+          <div className="who">{teamsById[t.champion]?.emoji} {teamsById[t.champion]?.name}</div>
+        </div>
+      )}
+
+      {tabs.length > 1 && (
+        <div className="chips" style={{marginBottom:14}}>
+          {tabs.map(([k, label]) => (
+            <button key={k} className={'chip'+(tab===k?' on':'')} onClick={()=>setTab(k)}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {tab==='partidos' && <MatchList t={t} teamsById={teamsById} onEdit={setEditMatch} />}
+      {tab==='tabla' && !isGroups && <StandingsTable teamIds={t.teamIds} matches={t.matches} teamsById={teamsById} />}
+      {tab==='tabla' && isGroups && <GroupTables t={t} teamsById={teamsById} />}
+      {tab==='bracket' && <Bracket matches={t.matches.filter(m=>m.stage==='ko')} teamsById={teamsById} onEdit={setEditMatch} locked={false} />}
+
+      {isGroups && !t.koStarted && (
+        <button className="btn primary" style={{marginTop:10}} disabled={!groupsDone} onClick={startKO}>
+          {groupsDone ? '⚔️ Iniciar fase eliminatoria' : 'Completa la fase de grupos para continuar'}</button>
+      )}
+      {leagueDone && t.status==='activo' && (
+        <button className="btn primary" style={{marginTop:10}} onClick={finishLeague}>🏆 Finalizar y coronar campeón</button>
+      )}
+
+      <button className="btn danger" style={{marginTop:24}} onClick={removeTournament}>Eliminar torneo</button>
+
+      {editMatch && <ScoreEditor match={editMatch} teamsById={teamsById}
+        onSave={saveResult} onClose={()=>setEditMatch(null)} />}
+    </React.Fragment>
+  );
+}
+
+function MatchList({ t, teamsById, onEdit }) {
+  const ms = t.matches.filter(m => m.stage !== 'ko');
+  const byRound = {};
+  ms.forEach(m => {
+    const key = m.group ? `Grupo ${m.group} · Fecha ${m.round}` : `Fecha ${m.round}`;
+    (byRound[key] = byRound[key] || []).push(m);
+  });
+  const keys = Object.keys(byRound).sort((a,b)=>{
+    const num = s => parseInt(s.match(/Fecha (\d+)/)[1]);
+    const grp = s => (s.match(/Grupo (\w)/)||[,''])[1];
+    return num(a)-num(b) || grp(a).localeCompare(grp(b));
+  });
+  return (
+    <React.Fragment>
+      {keys.map(k => (
+        <React.Fragment key={k}>
+          <div className="mrow-tag">{k}</div>
+          {byRound[k].map(m => (
+            <div className="mrow" key={m.id} onClick={()=>onEdit(m)} style={{cursor:'pointer'}}>
+              <div className="t"><TeamTag id={m.teamA} teamsById={teamsById} /></div>
+              <div className={'mid'+(m.played?'':' pend')}>
+                {m.played ? `${m.golesA} - ${m.golesB}` : 'VS'}</div>
+              <div className="t right"><TeamTag id={m.teamB} teamsById={teamsById} right /></div>
+            </div>
+          ))}
+        </React.Fragment>
+      ))}
+    </React.Fragment>
+  );
+}
+
+function StandingsTable({ teamIds, matches, teamsById, qualify = 0 }) {
+  const st = computeStandings(teamIds, matches, teamsById);
+  return (
+    <table className="table">
+      <thead><tr>
+        <th style={{textAlign:'left'}}>Equipo</th>
+        <th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th>
+      </tr></thead>
+      <tbody>
+        {st.map((s, i) => (
+          <tr key={s.id} className={qualify && i < qualify ? 'q' : ''}>
+            <td className="tname"><span className="pos">{i+1}</span> {teamsById[s.id]?.emoji} {teamsById[s.id]?.name}</td>
+            <td>{s.pj}</td><td>{s.pg}</td><td>{s.pe}</td><td>{s.pp}</td>
+            <td>{s.gf - s.gc > 0 ? '+' : ''}{s.gf - s.gc}</td>
+            <td className="pts">{s.pts}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function GroupTables({ t, teamsById }) {
+  return (
+    <React.Fragment>
+      {Object.keys(t.groups).sort().map(L => (
+        <div className="card" key={L}>
+          <div className="eyebrow">Grupo {L}</div>
+          <StandingsTable teamIds={t.groups[L]} matches={t.matches.filter(m=>m.group===L)}
+            teamsById={teamsById} qualify={t.config.advancePerGroup} />
+        </div>
+      ))}
+      <p style={{fontSize:11,color:'var(--muted)',textAlign:'center'}}>
+        La línea verde marca los puestos de clasificación.</p>
+    </React.Fragment>
+  );
+}
+
+function Bracket({ matches, teamsById, onEdit }) {
+  if (matches.length === 0) return null;
+  const rounds = {};
+  matches.forEach(m => (rounds[m.round] = rounds[m.round] || []).push(m));
+  const roundNums = Object.keys(rounds).map(Number).sort((a,b)=>a-b);
+  return (
+    <div className="bracket">
+      {roundNums.map(r => {
+        const rms = rounds[r].sort((a,b)=>a.index-b.index);
+        return (
+          <div className="b-round" key={r}>
+            <div className="b-round-title">{roundName(rms.length)}</div>
+            {rms.map(m => {
+              const w = koWinner(m);
+              const clickable = m.teamA && m.teamB && !m.bye;
+              return (
+                <div className="b-match" key={m.id}
+                  onClick={()=> clickable && onEdit(m)}
+                  style={clickable?{cursor:'pointer'}:{opacity: m.bye?0.65:1}}>
+                  <BSlot id={m.teamA} m={m} g={m.golesA} win={w===m.teamA && m.teamA} teamsById={teamsById} />
+                  <BSlot id={m.teamB} m={m} g={m.golesB} win={w===m.teamB && m.teamB} teamsById={teamsById} />
+                  {m.played && m.penA != null &&
+                    <div className="b-pens">Penales {m.penA} - {m.penB}</div>}
+                  {m.bye && <div className="b-pens" style={{color:'var(--muted)'}}>Pasa directo</div>}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BSlot({ id, m, g, win, teamsById }) {
+  const t = id ? teamsById[id] : null;
+  return (
+    <div className={'b-slot'+(win?' win':'')+(t?'':' tbd')}>
+      {t ? <React.Fragment><span>{t.emoji}</span><span>{t.name}</span></React.Fragment> : 'Por definir'}
+      {m.played && !m.bye && <span className="g">{g}</span>}
+    </div>
+  );
+}
+
+/* ============ EDITOR DE MARCADOR (firma) ============ */
+function ScoreEditor({ match, teamsById, onSave, onClose }) {
+  const [gA, setGA] = useState(match.golesA ?? 0);
+  const [gB, setGB] = useState(match.golesB ?? 0);
+  const [pA, setPA] = useState(match.penA ?? 0);
+  const [pB, setPB] = useState(match.penB ?? 0);
+  const isKO = match.stage === 'ko';
+  const needsPens = isKO && gA === gB;
+  const pensValid = !needsPens || pA !== pB;
+  const A = teamsById[match.teamA], B = teamsById[match.teamB];
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <div className="sb-meta">{isKO ? 'Partido eliminatorio' : match.group ? `Grupo ${match.group} · Fecha ${match.round}` : `Fecha ${match.round}`}</div>
+        <div className="scoreboard">
+          <div className="sb-teams">
+            <div className="sb-team">
+              <div className="shield">{A?.emoji}</div>
+              <div className="name">{A?.name}</div>
+              <div className="stepper" style={{marginTop:10}}>
+                <div className="val">{gA}</div>
+                <div className="ctrl">
+                  <button onClick={()=>setGA(Math.max(0,gA-1))}>−</button>
+                  <button onClick={()=>setGA(gA+1)}>+</button>
+                </div>
+              </div>
+            </div>
+            <div className="sb-vs">VS</div>
+            <div className="sb-team">
+              <div className="shield">{B?.emoji}</div>
+              <div className="name">{B?.name}</div>
+              <div className="stepper" style={{marginTop:10}}>
+                <div className="val">{gB}</div>
+                <div className="ctrl">
+                  <button onClick={()=>setGB(Math.max(0,gB-1))}>−</button>
+                  <button onClick={()=>setGB(gB+1)}>+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {needsPens && (
+          <div className="card" style={{marginTop:12,borderColor:'var(--gold)'}}>
+            <div className="eyebrow" style={{color:'var(--gold)'}}>⚡ Empate — definición a penales</div>
+            <div className="sb-teams">
+              <div className="stepper">
+                <div className="val" style={{fontSize:36,color:'var(--gold)'}}>{pA}</div>
+                <div className="ctrl">
+                  <button onClick={()=>setPA(Math.max(0,pA-1))}>−</button>
+                  <button onClick={()=>setPA(pA+1)}>+</button>
+                </div>
+              </div>
+              <div className="sb-vs" style={{fontSize:14}}>PEN</div>
+              <div className="stepper">
+                <div className="val" style={{fontSize:36,color:'var(--gold)'}}>{pB}</div>
+                <div className="ctrl">
+                  <button onClick={()=>setPB(Math.max(0,pB-1))}>−</button>
+                  <button onClick={()=>setPB(pB+1)}>+</button>
+                </div>
+              </div>
+            </div>
+            {!pensValid && <p style={{fontSize:12,color:'var(--danger)',textAlign:'center',marginTop:8}}>
+              Los penales no pueden terminar empatados.</p>}
+          </div>
+        )}
+
+        <button className="btn primary" style={{marginTop:14}} disabled={!pensValid}
+          onClick={()=>onSave(match.id, gA, gB, needsPens?pA:null, needsPens?pB:null)}>
+          ✅ Guardar resultado</button>
+        {match.played && <p style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:10}}>
+          Editar un resultado ya jugado recalcula las llaves siguientes.</p>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
