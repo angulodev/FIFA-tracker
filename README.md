@@ -1,41 +1,35 @@
 # ⚽ FIFA Torneos
 
-PWA para registrar partidos, torneos y campeones de FIFA. Single-file, sin build step.
+PWA para registrar torneos de FIFA **entre amigos**. Los que compiten son los jugadores; el club (PSG, Real Madrid...) se elige en cada partido. Single-file, sin build step, 100% localStorage.
+
+## Cómo funciona
+
+1. **Jugadores**: agrega a tus amigos (los que compiten en la liga)
+2. **Clubes**: catálogo precargado (PSG, Real Madrid, Colo-Colo...) + agrega los tuyos
+3. **Torneo**: elige formato y jugadores
+4. **Cada partido**: registras quién jugó, con qué club, y el marcador
+
+## Formatos
+
+- **Liga con sorteo**: fixture todos-contra-todos automático (ida o ida/vuelta)
+- **Liga libre** ✍️: sin fixture fijo — tú registras cada partido cuando se juega y la tabla se arma sola
+- **Eliminatoria**: llaves sorteadas, byes automáticos, penales en empates
+- **Grupos + Copa**: estilo Mundial (2 o 4 grupos, clasifican 2, cruces 1A vs 2B)
 
 ## Características
 
-- **Jugadores**: registra quién controla cada equipo; aparece en tablas, llaves y marcador
-- **3 formatos de torneo**: Liga (ida o ida/vuelta), Eliminatoria directa (con penales), Grupos + Copa (estilo Mundial, 2 o 4 grupos)
-- **Sorteo automático** de fixture y llaves (algoritmo round robin + bracket con byes)
-- **Tabla de posiciones** automática (Pts, DG, GF, orden FIFA)
-- **Bracket visual** con avance automático de ganadores
-- **Marcador tipo estadio** para registrar resultados
-- **Palmarés** e historial de campeones
-- **Export/Import JSON** para respaldo
-- **PWA instalable** con funcionamiento offline
-
-## Deploy en GitHub Pages
-
-```bash
-git init
-git add .
-git commit -m "FIFA Torneos v1.0"
-git branch -M main
-git remote add origin https://github.com/angulodev/FIFA-tracker.git
-git push -u origin main
-```
-
-Luego en GitHub: **Settings → Pages → Source: Deploy from a branch → main / (root) → Save**
-
-En unos minutos queda en: `https://angulodev.github.io/FIFA-tracker/`
+- Tabla de posiciones con criterios FIFA (Pts → DG → GF)
+- Bracket visual con avance automático
+- Marcador tipo estadio con selector de club por lado
+- Palmarés e historial de campeones por jugador
+- Export/Import JSON para respaldo
+- PWA instalable, funciona offline
+- **Todos los datos viven en localStorage del navegador** — nada sale de tu dispositivo
 
 ## Stack
 
-- React 18 (UMD) + Babel standalone — sin build
-- CSS custom (tema "estadio nocturno" con acento volt)
-- localStorage (`fifa_tracker_v1`)
-- Service Worker (network-first)
+React 18 UMD + Babel standalone 7 (versiones fijadas) · CSS custom · localStorage (`fifa_tracker_v1`) · Service Worker network-first
 
-## Datos
+## URL
 
-Todo se guarda localmente en el navegador. Usa **Equipos → Exportar datos** para respaldar antes de limpiar el navegador o cambiar de dispositivo.
+https://angulodev.github.io/FIFA-tracker/

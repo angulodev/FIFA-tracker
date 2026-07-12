@@ -183,14 +183,32 @@ input,select{font-family:inherit;font-size:16px}
 /* ============ STORAGE ============ */
 const LS_KEY = 'fifa_tracker_v1';
 const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+
+const DEFAULT_CLUBS = ['PSG','Real Madrid','Barcelona','Manchester City','Liverpool','Bayern Múnich',
+  'Colo-Colo','U. de Chile','U. Católica','Boca Juniors','River Plate','Milan','Inter','Juventus',
+  'Arsenal','Chelsea','Atlético Madrid','Borussia Dortmund'];
+
 const loadDB = () => {
   let d;
   try { d = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { d = {}; }
-  return { teams: d.teams || [], players: d.players || [], tournaments: d.tournaments || [] };
+  // Migración v1 → v2: los "teams" antiguos pasan a ser jugadores (mismos IDs,
+  // así los torneos existentes siguen funcionando)
+  let players = d.players || [];
+  if (d.teams && d.teams.length) {
+    d.teams.forEach(t => {
+      if (!players.some(p => p.id === t.id)) players.push({ id: t.id, name: t.name, emoji: t.emoji || '🎮' });
+    });
+  }
+  players = players.map(p => ({ emoji: '🎮', ...p }));
+  const clubs = d.clubs && d.clubs.length ? d.clubs
+    : DEFAULT_CLUBS.map(n => ({ id: uid(), name: n }));
+  const tournaments = (d.tournaments || []).map(t => ({
+    ...t, config: { fixtureMode: 'sorteo', ...(t.config || {}) } }));
+  return { players, clubs, tournaments };
 };
 const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
 
-const SHIELDS = ['⚽','🦁','🐺','🦅','🐂','🐉','⚡','🔥','👑','🛡️','⭐','💀','🦈','🐆','🏴‍☠️','🚀','🎯','🥇','🌪️','🐍','🦂','🏹','⚔️','💎'];
+const SHIELDS = ['🎮','⚽','🦁','🐺','🦅','🐂','🐉','⚡','🔥','👑','🛡️','⭐','💀','🦈','🐆','🏴‍☠️','🚀','🎯','🥇','🌪️','🐍','🦂','🏹','⚔️'];
 
 /* ============ ENGINE (puro) ============ */
 const shuffle = (arr) => {
@@ -362,6 +380,7 @@ function qualifiersOrdered(groups, matches, advancePerGroup, teamsById) {
   return ordered.filter(Boolean);
 }
 
+
 /* ============ APP ============ */
 const { useState, useEffect, useMemo, useRef } = React;
 
@@ -375,6 +394,8 @@ function useHashRoute() {
   return hash;
 }
 const go = (h) => { window.location.hash = h; };
+const fmtDate = (ts) => new Date(ts).toLocaleDateString('es-CL', { day:'numeric', month:'short' });
+const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
 
 function App() {
   const [db, setDb] = useState(loadDB);
@@ -384,27 +405,24 @@ function App() {
     saveDB(next);
     return next;
   });
-  const teamsById = useMemo(() => {
-    const playersById = Object.fromEntries(db.players.map(p => [p.id, p]));
-    return Object.fromEntries(db.teams.map(t => [t.id,
-      { ...t, playerName: t.playerId && playersById[t.playerId] ? playersById[t.playerId].name : null }]));
-  }, [db.teams, db.players]);
+  const playersById = useMemo(() => Object.fromEntries(db.players.map(p => [p.id, p])), [db.players]);
+  const clubsById = useMemo(() => Object.fromEntries(db.clubs.map(c => [c.id, c])), [db.clubs]);
 
   let screen, tab;
   if (hash.startsWith('#/torneo/')) {
     const id = hash.split('/')[2];
     const t = db.tournaments.find(x => x.id === id);
-    screen = t ? <TournamentView key={id} t={t} db={db} update={update} teamsById={teamsById} />
+    screen = t ? <TournamentView key={id} t={t} db={db} update={update} playersById={playersById} clubsById={clubsById} />
                : <div className="empty"><div className="big">🤷</div>Torneo no encontrado</div>;
     tab = 'torneos';
   } else if (hash === '#/nuevo') {
     screen = <NewTournament db={db} update={update} />; tab = 'torneos';
-  } else if (hash === '#/equipos') {
-    screen = <TeamsView db={db} update={update} />; tab = 'equipos';
+  } else if (hash === '#/jugadores') {
+    screen = <PlayersView db={db} update={update} />; tab = 'jugadores';
   } else if (hash === '#/torneos') {
-    screen = <TournamentsList db={db} teamsById={teamsById} />; tab = 'torneos';
+    screen = <TournamentsList db={db} playersById={playersById} />; tab = 'torneos';
   } else {
-    screen = <Dashboard db={db} update={update} teamsById={teamsById} />; tab = 'inicio';
+    screen = <Dashboard db={db} playersById={playersById} clubsById={clubsById} />; tab = 'inicio';
   }
 
   return (
@@ -412,7 +430,7 @@ function App() {
       <div className="topbar">
         <div>
           <h1>FIFA Torneos</h1>
-          <div className="sub">Marcador · Ligas · Copas</div>
+          <div className="sub">Amigos · Ligas · Copas</div>
         </div>
         <div style={{fontSize:28}}>⚽</div>
       </div>
@@ -422,40 +440,40 @@ function App() {
           <span className="ico">🏟️</span>Inicio</button>
         <button className={tab==='torneos'?'active':''} onClick={()=>go('#/torneos')}>
           <span className="ico">🏆</span>Torneos</button>
-        <button className={tab==='equipos'?'active':''} onClick={()=>go('#/equipos')}>
-          <span className="ico">🛡️</span>Equipos</button>
+        <button className={tab==='jugadores'?'active':''} onClick={()=>go('#/jugadores')}>
+          <span className="ico">🎮</span>Jugadores</button>
       </nav>
     </React.Fragment>
   );
 }
 
 /* ============ COMPONENTES BASE ============ */
-function TeamTag({ id, teamsById, right }) {
-  const t = teamsById[id];
-  if (!t) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
-  const label = <span className="nm">{t.name}{t.playerName && <span className="pname"> · {t.playerName}</span>}</span>;
+function PlayerTag({ id, playersById, club, right }) {
+  const p = playersById[id];
+  if (!p) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
+  const label = (
+    <span className="nm">{p.name}
+      {club && <span className="pname"> · {club}</span>}
+    </span>
+  );
   return right
-    ? <React.Fragment>{label}<span>{t.emoji}</span></React.Fragment>
-    : <React.Fragment><span>{t.emoji}</span>{label}</React.Fragment>;
+    ? <React.Fragment>{label}<span>{p.emoji}</span></React.Fragment>
+    : <React.Fragment><span>{p.emoji}</span>{label}</React.Fragment>;
 }
 
-const fmtDate = (ts) => new Date(ts).toLocaleDateString('es-CL', { day:'numeric', month:'short' });
-
 /* ============ DASHBOARD ============ */
-function Dashboard({ db, teamsById }) {
+function Dashboard({ db, playersById, clubsById }) {
   const active = db.tournaments.filter(t => t.status === 'activo');
   const done = db.tournaments.filter(t => t.status === 'finalizado');
-  const allMatches = db.tournaments.flatMap(t => t.matches);
-  const played = allMatches.filter(m => m.played && !m.bye);
+  const played = db.tournaments.flatMap(t => t.matches).filter(m => m.played && !m.bye);
   const goles = played.reduce((s, m) => s + m.golesA + m.golesB, 0);
 
-  // Palmarés: campeonatos por equipo
   const cups = {};
   done.forEach(t => { if (t.champion) cups[t.champion] = (cups[t.champion] || 0) + 1; });
   const topChamp = Object.entries(cups).sort((a,b) => b[1]-a[1])[0];
 
-  const lastPlayed = db.tournaments.flatMap(t => t.matches.filter(m => m.played && !m.bye)
-    .map(m => ({...m, tName: t.name}))).sort((a,b) => (b.playedAt||0)-(a.playedAt||0)).slice(0,3);
+  const lastPlayed = db.tournaments.flatMap(t => t.matches.filter(m => m.played && !m.bye))
+    .sort((a,b) => (b.playedAt||0)-(a.playedAt||0)).slice(0,3);
 
   return (
     <React.Fragment>
@@ -463,20 +481,20 @@ function Dashboard({ db, teamsById }) {
         <div className="stat"><div className="n">{played.length}</div><div className="l">Partidos jugados</div></div>
         <div className="stat"><div className="n">{goles}</div><div className="l">Goles totales</div></div>
         <div className="stat"><div className="n">{done.length}</div><div className="l">Torneos completados</div></div>
-        <div className="stat"><div className="n">{db.teams.length}</div><div className="l">Equipos</div></div>
+        <div className="stat"><div className="n">{db.players.length}</div><div className="l">Jugadores</div></div>
       </div>
 
-      {topChamp && teamsById[topChamp[0]] && (
+      {topChamp && playersById[topChamp[0]] && (
         <div className="champ-banner">
           <div className="cup">👑</div>
           <div className="eyebrow" style={{marginBottom:0}}>Máximo campeón</div>
-          <div className="who">{teamsById[topChamp[0]].emoji} {teamsById[topChamp[0]].name}</div>
+          <div className="who">{playersById[topChamp[0]].emoji} {playersById[topChamp[0]].name}</div>
           <div style={{fontSize:12,color:'var(--muted)'}}>{topChamp[1]} título{topChamp[1]>1?'s':''}</div>
         </div>
       )}
 
       {active.length > 0 && <div className="section-title">En juego</div>}
-      {active.map(t => <TournamentCard key={t.id} t={t} teamsById={teamsById} />)}
+      {active.map(t => <TournamentCard key={t.id} t={t} playersById={playersById} />)}
 
       <button className="btn primary" style={{marginTop:8}} onClick={()=>go('#/nuevo')}>
         + Nuevo torneo</button>
@@ -486,46 +504,46 @@ function Dashboard({ db, teamsById }) {
           <div className="section-title">Últimos resultados</div>
           {lastPlayed.map(m => (
             <div className="mrow" key={m.id}>
-              <div className="t"><TeamTag id={m.teamA} teamsById={teamsById} /></div>
+              <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]?.name} /></div>
               <div className="mid">{m.golesA} - {m.golesB}</div>
-              <div className="t right"><TeamTag id={m.teamB} teamsById={teamsById} right /></div>
+              <div className="t right"><PlayerTag id={m.teamB} playersById={playersById} club={clubsById[m.clubB]?.name} right /></div>
             </div>
           ))}
         </React.Fragment>
       )}
 
-      {db.tournaments.length === 0 && db.teams.length === 0 && (
+      {db.tournaments.length === 0 && (
         <div className="empty">
           <div className="big">🏟️</div>
-          <p>El estadio está vacío.<br/>Crea tus equipos y arma el primer torneo.</p>
+          <p>El estadio está vacío.<br/>Agrega a tus amigos en Jugadores y arma la primera liga.</p>
         </div>
       )}
     </React.Fragment>
   );
 }
 
-function TournamentCard({ t, teamsById }) {
-  const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
+function TournamentCard({ t, playersById }) {
   const played = t.matches.filter(m => m.played && !m.bye).length;
   const total = t.matches.filter(m => !m.bye).length;
+  const manual = t.config.fixtureMode === 'manual';
   return (
     <div className="card tap" onClick={()=>go('#/torneo/'+t.id)}>
       <div className="row">
         <div className="grow">
-          <div className="eyebrow">{FORMATS[t.format]} · {t.teamIds.length} equipos</div>
+          <div className="eyebrow">{FORMATS[t.format]}{manual?' libre':''} · {t.teamIds.length} jugadores</div>
           <div className="display" style={{fontSize:18}}>{t.name}</div>
           <div style={{fontSize:12,color:'var(--muted)',marginTop:4}}>
-            {played}/{total} partidos · {fmtDate(t.createdAt)}</div>
+            {manual ? `${played} partidos` : `${played}/${total} partidos`} · {fmtDate(t.createdAt)}</div>
         </div>
         {t.status === 'finalizado'
-          ? <span className="badge done">🏆 {teamsById[t.champion]?.name || 'Finalizado'}</span>
+          ? <span className="badge done">🏆 {playersById[t.champion]?.name || 'Finalizado'}</span>
           : <span className="badge on">En juego</span>}
       </div>
     </div>
   );
 }
 
-function TournamentsList({ db, teamsById }) {
+function TournamentsList({ db, playersById }) {
   const sorted = [...db.tournaments].sort((a,b) => b.createdAt - a.createdAt);
   return (
     <React.Fragment>
@@ -534,58 +552,42 @@ function TournamentsList({ db, teamsById }) {
         ? <div className="empty"><div className="big">🏆</div><p>Aún no hay torneos.<br/>Crea el primero y que ruede la pelota.</p></div>
         : <React.Fragment>
             <div className="section-title">Todos los torneos</div>
-            {sorted.map(t => <TournamentCard key={t.id} t={t} teamsById={teamsById} />)}
+            {sorted.map(t => <TournamentCard key={t.id} t={t} playersById={playersById} />)}
           </React.Fragment>}
     </React.Fragment>
   );
 }
 
-/* ============ EQUIPOS ============ */
-function TeamsView({ db, update }) {
-  const [editing, setEditing] = useState(null); // null | {} | team
-  const [editingPlayer, setEditingPlayer] = useState(null);
+/* ============ JUGADORES & CLUBES ============ */
+function PlayersView({ db, update }) {
+  const [editing, setEditing] = useState(null);
+  const [newClub, setNewClub] = useState('');
   const fileRef = useRef(null);
 
-  const usedIn = (teamId) => db.tournaments.some(t => t.teamIds.includes(teamId));
+  const usedIn = (pid) => db.tournaments.some(t => t.teamIds.includes(pid));
 
-  const saveTeam = (team) => {
+  const savePlayer = (p) => {
     update(d => {
-      if (team.id) {
-        const i = d.teams.findIndex(x => x.id === team.id);
-        d.teams[i] = team;
-      } else {
-        d.teams.push({ ...team, id: uid() });
-      }
+      if (p.id) { const i = d.players.findIndex(x => x.id === p.id); d.players[i] = p; }
+      else d.players.push({ ...p, id: uid() });
       return d;
     });
     setEditing(null);
   };
-
-  const removeTeam = (id) => {
-    if (usedIn(id)) { alert('Este equipo participa en torneos. No se puede eliminar.'); return; }
-    if (confirm('¿Eliminar equipo?')) update(d => { d.teams = d.teams.filter(t => t.id !== id); return d; });
-  };
-
-  const savePlayer = (player) => {
-    update(d => {
-      if (player.id) {
-        const i = d.players.findIndex(x => x.id === player.id);
-        d.players[i] = player;
-      } else {
-        d.players.push({ ...player, id: uid() });
-      }
-      return d;
-    });
-    setEditingPlayer(null);
-  };
-
   const removePlayer = (id) => {
-    if (confirm('¿Eliminar jugador? Sus equipos quedarán sin jugador asignado.'))
-      update(d => {
-        d.players = d.players.filter(p => p.id !== id);
-        d.teams.forEach(t => { if (t.playerId === id) t.playerId = null; });
-        return d;
-      });
+    if (usedIn(id)) { alert('Este jugador participa en torneos. No se puede eliminar.'); return; }
+    if (confirm('¿Eliminar jugador?')) update(d => { d.players = d.players.filter(p => p.id !== id); return d; });
+  };
+
+  const addClub = () => {
+    const name = newClub.trim();
+    if (!name) return;
+    if (db.clubs.some(c => c.name.toLowerCase() === name.toLowerCase())) { setNewClub(''); return; }
+    update(d => { d.clubs.push({ id: uid(), name }); return d; });
+    setNewClub('');
+  };
+  const removeClub = (id) => {
+    update(d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
   };
 
   const exportData = () => {
@@ -602,58 +604,51 @@ function TeamsView({ db, update }) {
     r.onload = () => {
       try {
         const data = JSON.parse(r.result);
-        if (!data.teams || !data.tournaments) throw new Error();
-        if (confirm('Esto reemplaza todos los datos actuales. ¿Continuar?'))
-          update(() => ({ teams: data.teams || [], players: data.players || [],
-            tournaments: data.tournaments || [] }));
+        if (!data.players && !data.teams) throw new Error();
+        if (confirm('Esto reemplaza todos los datos actuales. ¿Continuar?')) {
+          localStorage.setItem(LS_KEY, r.result);
+          update(() => loadDB());
+        }
       } catch { alert('El archivo no es un respaldo válido.'); }
     };
     r.readAsText(f);
     e.target.value = '';
   };
 
-  const teamsOf = (pid) => db.teams.filter(t => t.playerId === pid);
-
   return (
     <React.Fragment>
-      <div className="section-title" style={{marginTop:0}}>Jugadores ({db.players.length})</div>
-      <button className="btn ghost" onClick={()=>setEditingPlayer({ name:'' })}>+ Nuevo jugador</button>
+      <button className="btn primary" onClick={()=>setEditing({ name:'', emoji:'🎮' })}>+ Nuevo jugador</button>
+      <div className="section-title">Jugadores ({db.players.length})</div>
+      {db.players.length === 0 && (
+        <div className="empty"><div className="big">🎮</div><p>Sin jugadores todavía.<br/>Agrega al menos 2 amigos para armar un torneo.</p></div>
+      )}
       {db.players.map(p => (
-        <div className="card" key={p.id} style={{marginTop:10}}>
+        <div className="card" key={p.id}>
           <div className="row">
-            <div style={{fontSize:24}}>🎮</div>
-            <div className="grow">
-              <div style={{fontWeight:700}}>{p.name}</div>
-              <div style={{fontSize:11,color:'var(--muted)'}}>
-                {teamsOf(p.id).length > 0
-                  ? teamsOf(p.id).map(t=>t.emoji+' '+t.name).join(' · ')
-                  : 'Sin equipos asignados'}</div>
-            </div>
-            <button className="btn ghost sm" onClick={()=>setEditingPlayer(p)}>Editar</button>
+            <div style={{fontSize:30}}>{p.emoji}</div>
+            <div className="grow" style={{fontWeight:700}}>{p.name}</div>
+            <button className="btn ghost sm" onClick={()=>setEditing(p)}>Editar</button>
             <button className="btn danger sm" onClick={()=>removePlayer(p.id)}>✕</button>
           </div>
         </div>
       ))}
 
-      <div className="section-title">Equipos ({db.teams.length})</div>
-      <button className="btn primary" onClick={()=>setEditing({ name:'', emoji:'⚽', playerId:null })}>+ Nuevo equipo</button>
-      {db.teams.length === 0 && (
-        <div className="empty"><div className="big">🛡️</div><p>Sin equipos todavía.<br/>Crea al menos 2 para armar un torneo.</p></div>
-      )}
-      {db.teams.map(t => (
-        <div className="card" key={t.id} style={{marginTop:10}}>
-          <div className="row">
-            <div style={{fontSize:30}}>{t.emoji}</div>
-            <div className="grow">
-              <div style={{fontWeight:700}}>{t.name}</div>
-              {t.playerId && <div style={{fontSize:11,color:'var(--muted)'}}>
-                🎮 {db.players.find(p=>p.id===t.playerId)?.name}</div>}
-            </div>
-            <button className="btn ghost sm" onClick={()=>setEditing(t)}>Editar</button>
-            <button className="btn danger sm" onClick={()=>removeTeam(t.id)}>✕</button>
-          </div>
-        </div>
-      ))}
+      <div className="section-title">Clubes ({db.clubs.length})</div>
+      <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
+        El club se elige en cada partido: hoy juegas con PSG, mañana con otro.</p>
+      <div className="row" style={{marginBottom:10}}>
+        <input value={newClub} onChange={e=>setNewClub(e.target.value)}
+          onKeyDown={e=>e.key==='Enter'&&addClub()}
+          placeholder="Agregar club..." style={{flex:1,padding:'11px 14px',background:'var(--surface2)',
+          border:'1px solid var(--line)',borderRadius:12,color:'var(--text)',outline:'none'}} />
+        <button className="btn ghost sm" onClick={addClub}>＋</button>
+      </div>
+      <div className="chips">
+        {db.clubs.map(c => (
+          <span key={c.id} className="chip">{c.name}
+            <button onClick={()=>removeClub(c.id)} style={{marginLeft:6,color:'var(--muted)'}}>✕</button></span>
+        ))}
+      </div>
 
       <div className="section-title">Respaldo</div>
       <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
@@ -664,14 +659,14 @@ function TeamsView({ db, update }) {
         <input type="file" accept=".json" ref={fileRef} style={{display:'none'}} onChange={importData} />
       </div>
 
-      {editing && <TeamEditor team={editing} players={db.players} onSave={saveTeam} onClose={()=>setEditing(null)} />}
-      {editingPlayer && <PlayerEditor player={editingPlayer} onSave={savePlayer} onClose={()=>setEditingPlayer(null)} />}
+      {editing && <PlayerEditor player={editing} onSave={savePlayer} onClose={()=>setEditing(null)} />}
     </React.Fragment>
   );
 }
 
 function PlayerEditor({ player, onSave, onClose }) {
   const [name, setName] = useState(player.name);
+  const [emoji, setEmoji] = useState(player.emoji || '🎮');
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={e=>e.stopPropagation()}>
@@ -681,37 +676,8 @@ function PlayerEditor({ player, onSave, onClose }) {
           <label>Nombre</label>
           <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Francisco" autoFocus />
         </div>
-        <button className="btn primary" disabled={!name.trim()}
-          onClick={()=>onSave({ ...player, name: name.trim() })}>Guardar jugador</button>
-      </div>
-    </div>
-  );
-}
-
-function TeamEditor({ team, players, onSave, onClose }) {
-  const [name, setName] = useState(team.name);
-  const [emoji, setEmoji] = useState(team.emoji);
-  const [playerId, setPlayerId] = useState(team.playerId || '');
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={e=>e.stopPropagation()}>
-        <div className="sheet-grab" />
-        <h2 className="display">{team.id ? 'Editar equipo' : 'Nuevo equipo'}</h2>
         <div className="field">
-          <label>Nombre</label>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Los Galácticos" autoFocus />
-        </div>
-        <div className="field">
-          <label>Jugador (quién lo controla)</label>
-          <select value={playerId} onChange={e=>setPlayerId(e.target.value)}>
-            <option value="">— Sin jugador —</option>
-            {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          {players.length === 0 && <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
-            Crea jugadores en la sección Jugadores para asignarlos aquí.</p>}
-        </div>
-        <div className="field">
-          <label>Escudo</label>
+          <label>Avatar</label>
           <div className="emoji-grid">
             {SHIELDS.map(s => (
               <button key={s} className={emoji===s?'on':''} onClick={()=>setEmoji(s)}>{s}</button>
@@ -719,7 +685,7 @@ function TeamEditor({ team, players, onSave, onClose }) {
           </div>
         </div>
         <button className="btn primary" disabled={!name.trim()}
-          onClick={()=>onSave({ ...team, name: name.trim(), emoji, playerId: playerId || null })}>Guardar equipo</button>
+          onClick={()=>onSave({ ...player, name: name.trim(), emoji })}>Guardar jugador</button>
       </div>
     </div>
   );
@@ -732,26 +698,26 @@ function NewTournament({ db, update }) {
   const [selected, setSelected] = useState([]);
   const [idaVuelta, setIdaVuelta] = useState(false);
   const [numGroups, setNumGroups] = useState(2);
+  const [fixtureMode, setFixtureMode] = useState('sorteo');
 
   const toggle = (id) => setSelected(s => s.includes(id) ? s.filter(x=>x!==id) : [...s, id]);
   const min = format === 'grupos' ? numGroups * 2 : 2;
-  const groupOptions = [2,4].filter(g => true);
-  const valid = name.trim() && selected.length >= min &&
-    (format !== 'grupos' || selected.length >= numGroups * 2);
+  const valid = name.trim() && selected.length >= min;
 
   const create = () => {
+    const manual = format === 'liga' && fixtureMode === 'manual';
     const t = {
       id: uid(), name: name.trim(), format, teamIds: [...selected],
       status: 'activo', champion: null, createdAt: Date.now(),
-      config: { idaVuelta, numGroups, advancePerGroup: 2 },
+      config: { idaVuelta, numGroups, advancePerGroup: 2, fixtureMode: manual ? 'manual' : 'sorteo' },
       groups: null, matches: [], koStarted: false
     };
-    if (format === 'liga') {
+    if (format === 'liga' && !manual) {
       t.matches = roundRobin(selected, { idaVuelta });
     } else if (format === 'eliminatoria') {
       t.matches = buildBracket(selected);
       t.koStarted = true;
-    } else {
+    } else if (format === 'grupos') {
       const { groups, matches } = buildGroups(selected, numGroups);
       t.groups = groups; t.matches = matches;
     }
@@ -764,7 +730,7 @@ function NewTournament({ db, update }) {
       <h2 className="display" style={{fontSize:20,marginBottom:14}}>Nuevo torneo</h2>
       <div className="field">
         <label>Nombre del torneo</label>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Copa Rengo 2026" />
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Liga de los Viernes" />
       </div>
       <div className="field">
         <label>Formato</label>
@@ -775,13 +741,26 @@ function NewTournament({ db, update }) {
         </div>
       </div>
       {format === 'liga' && (
-        <div className="field">
-          <label>Vueltas</label>
-          <div className="chips">
-            <button className={'chip'+(!idaVuelta?' on':'')} onClick={()=>setIdaVuelta(false)}>Solo ida</button>
-            <button className={'chip'+(idaVuelta?' on':'')} onClick={()=>setIdaVuelta(true)}>Ida y vuelta</button>
+        <React.Fragment>
+          <div className="field">
+            <label>Fixture</label>
+            <div className="chips">
+              <button className={'chip'+(fixtureMode==='sorteo'?' on':'')} onClick={()=>setFixtureMode('sorteo')}>🎲 Sorteo automático</button>
+              <button className={'chip'+(fixtureMode==='manual'?' on':'')} onClick={()=>setFixtureMode('manual')}>✍️ Yo armo los partidos</button>
+            </div>
+            {fixtureMode==='manual' && <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+              Sin fixture fijo: agregas cada partido cuando se juega. La tabla se arma sola.</p>}
           </div>
-        </div>
+          {fixtureMode === 'sorteo' && (
+            <div className="field">
+              <label>Vueltas</label>
+              <div className="chips">
+                <button className={'chip'+(!idaVuelta?' on':'')} onClick={()=>setIdaVuelta(false)}>Solo ida</button>
+                <button className={'chip'+(idaVuelta?' on':'')} onClick={()=>setIdaVuelta(true)}>Ida y vuelta</button>
+              </div>
+            </div>
+          )}
+        </React.Fragment>
       )}
       {format === 'grupos' && (
         <div className="field">
@@ -793,38 +772,38 @@ function NewTournament({ db, update }) {
         </div>
       )}
       <div className="field">
-        <label>Equipos ({selected.length} seleccionados · mínimo {min})</label>
-        {db.teams.length < 2 && (
+        <label>Jugadores ({selected.length} seleccionados · mínimo {min})</label>
+        {db.players.length < 2 && (
           <div className="empty" style={{padding:'18px 10px'}}>
-            <p>Necesitas equipos primero.</p>
-            <button className="btn ghost sm" style={{marginTop:10}} onClick={()=>go('#/equipos')}>Ir a Equipos</button>
+            <p>Necesitas jugadores primero.</p>
+            <button className="btn ghost sm" style={{marginTop:10}} onClick={()=>go('#/jugadores')}>Ir a Jugadores</button>
           </div>
         )}
         <div className="chips">
-          {db.teams.map(t => (
-            <button key={t.id} className={'chip'+(selected.includes(t.id)?' on':'')} onClick={()=>toggle(t.id)}>
-              {t.emoji} {t.name}</button>
+          {db.players.map(p => (
+            <button key={p.id} className={'chip'+(selected.includes(p.id)?' on':'')} onClick={()=>toggle(p.id)}>
+              {p.emoji} {p.name}</button>
           ))}
         </div>
       </div>
-      <button className="btn primary" disabled={!valid} onClick={create}>🎲 Sortear y crear torneo</button>
-      <p style={{fontSize:12,color:'var(--muted)',textAlign:'center',marginTop:10}}>
-        El fixture y los cruces se sortean automáticamente.</p>
+      <button className="btn primary" disabled={!valid} onClick={create}>
+        {format==='liga'&&fixtureMode==='manual' ? '✍️ Crear liga libre' : '🎲 Sortear y crear torneo'}</button>
     </React.Fragment>
   );
 }
 
 /* ============ VISTA DE TORNEO ============ */
-function TournamentView({ t, db, update, teamsById }) {
+function TournamentView({ t, db, update, playersById, clubsById }) {
   const isKO = t.format === 'eliminatoria';
   const isGroups = t.format === 'grupos';
-  const defaultTab = isKO ? 'bracket' : 'partidos';
-  const [tab, setTab] = useState(defaultTab);
+  const manual = t.config.fixtureMode === 'manual';
+  const [tab, setTab] = useState(isKO ? 'bracket' : 'partidos');
   const [editMatch, setEditMatch] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   const groupsDone = isGroups && t.matches.filter(m => m.stage==='grupos').every(m => m.played);
 
-  const saveResult = (matchId, golesA, golesB, penA, penB) => {
+  const saveResult = (matchId, golesA, golesB, penA, penB, clubA, clubB) => {
     update(d => {
       const tt = d.tournaments.find(x => x.id === t.id);
       const m = tt.matches.find(x => x.id === matchId);
@@ -832,6 +811,7 @@ function TournamentView({ t, db, update, teamsById }) {
       if (wasKO && m.played) clearDownstream(tt.matches, m);
       m.golesA = golesA; m.golesB = golesB;
       m.penA = penA; m.penB = penB;
+      m.clubA = clubA; m.clubB = clubB;
       m.played = true; m.playedAt = Date.now();
       if (wasKO) {
         const w = koWinner(m);
@@ -844,10 +824,32 @@ function TournamentView({ t, db, update, teamsById }) {
     setEditMatch(null);
   };
 
+  const addManualMatch = (playerA, playerB, golesA, golesB, clubA, clubB) => {
+    update(d => {
+      const tt = d.tournaments.find(x => x.id === t.id);
+      const round = tt.matches.length + 1;
+      tt.matches.push({ id: uid(), stage:'liga', group:null, round,
+        teamA: playerA, teamB: playerB, golesA, golesB, clubA, clubB,
+        played: true, playedAt: Date.now() });
+      return d;
+    });
+    setAdding(false);
+  };
+
+  const deleteMatch = (matchId) => {
+    if (!confirm('¿Eliminar este partido?')) return;
+    update(d => {
+      const tt = d.tournaments.find(x => x.id === t.id);
+      tt.matches = tt.matches.filter(m => m.id !== matchId);
+      return d;
+    });
+    setEditMatch(null);
+  };
+
   const startKO = () => {
     update(d => {
       const tt = d.tournaments.find(x => x.id === t.id);
-      const ordered = qualifiersOrdered(tt.groups, tt.matches, tt.config.advancePerGroup, teamsById);
+      const ordered = qualifiersOrdered(tt.groups, tt.matches, tt.config.advancePerGroup, playersById);
       tt.matches = tt.matches.concat(buildBracketFromOrdered(ordered));
       tt.koStarted = true;
       return d;
@@ -856,8 +858,8 @@ function TournamentView({ t, db, update, teamsById }) {
   };
 
   const finishLeague = () => {
-    const st = computeStandings(t.teamIds, t.matches, teamsById);
-    if (confirm(`Finalizar torneo y coronar a ${teamsById[st[0].id]?.name}?`)) {
+    const st = computeStandings(t.teamIds, t.matches, playersById);
+    if (confirm(`Finalizar torneo y coronar a ${playersById[st[0].id]?.name}?`)) {
       update(d => {
         const tt = d.tournaments.find(x => x.id === t.id);
         tt.status = 'finalizado'; tt.champion = st[0].id;
@@ -873,8 +875,8 @@ function TournamentView({ t, db, update, teamsById }) {
     }
   };
 
-  const leagueDone = t.format==='liga' && t.matches.length>0 && t.matches.every(m=>m.played);
-  const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
+  const fixtureDone = t.format==='liga' && !manual && t.matches.length>0 && t.matches.every(m=>m.played);
+  const manualReady = manual && t.matches.filter(m=>m.played).length >= 1;
   const tabs = [];
   if (!isKO) tabs.push(['partidos','Partidos']);
   if (t.format==='liga' || isGroups) tabs.push(['tabla', isGroups?'Grupos':'Tabla']);
@@ -882,15 +884,14 @@ function TournamentView({ t, db, update, teamsById }) {
 
   return (
     <React.Fragment>
-      <div className="eyebrow">{FORMATS[t.format]} · {t.teamIds.length} equipos · {fmtDate(t.createdAt)}</div>
+      <div className="eyebrow">{FORMATS[t.format]}{manual?' libre':''} · {t.teamIds.length} jugadores · {fmtDate(t.createdAt)}</div>
       <h2 className="display" style={{fontSize:22,marginBottom:12}}>{t.name}</h2>
 
       {t.status === 'finalizado' && t.champion && (
         <div className="champ-banner">
           <div className="cup">🏆</div>
           <div className="eyebrow" style={{marginBottom:0}}>Campeón</div>
-          <div className="who">{teamsById[t.champion]?.emoji} {teamsById[t.champion]?.name}</div>
-          {teamsById[t.champion]?.playerName && <div style={{fontSize:12,color:'var(--muted)'}}>🎮 {teamsById[t.champion].playerName}</div>}
+          <div className="who">{playersById[t.champion]?.emoji} {playersById[t.champion]?.name}</div>
         </div>
       )}
 
@@ -902,29 +903,51 @@ function TournamentView({ t, db, update, teamsById }) {
         </div>
       )}
 
-      {tab==='partidos' && <MatchList t={t} teamsById={teamsById} onEdit={setEditMatch} />}
-      {tab==='tabla' && !isGroups && <StandingsTable teamIds={t.teamIds} matches={t.matches} teamsById={teamsById} />}
-      {tab==='tabla' && isGroups && <GroupTables t={t} teamsById={teamsById} />}
-      {tab==='bracket' && <Bracket matches={t.matches.filter(m=>m.stage==='ko')} teamsById={teamsById} onEdit={setEditMatch} locked={false} />}
+      {tab==='partidos' && manual && t.status==='activo' && (
+        <button className="btn primary" style={{marginBottom:14}} onClick={()=>setAdding(true)}>
+          + Registrar partido</button>
+      )}
+      {tab==='partidos' && <MatchList t={t} playersById={playersById} clubsById={clubsById}
+        manual={manual} onEdit={setEditMatch} />}
+      {tab==='tabla' && !isGroups && <StandingsTable teamIds={t.teamIds} matches={t.matches}
+        playersById={playersById} />}
+      {tab==='tabla' && isGroups && <GroupTables t={t} playersById={playersById} />}
+      {tab==='bracket' && <Bracket matches={t.matches.filter(m=>m.stage==='ko')}
+        playersById={playersById} clubsById={clubsById} onEdit={setEditMatch} />}
 
       {isGroups && !t.koStarted && (
         <button className="btn primary" style={{marginTop:10}} disabled={!groupsDone} onClick={startKO}>
           {groupsDone ? '⚔️ Iniciar fase eliminatoria' : 'Completa la fase de grupos para continuar'}</button>
       )}
-      {leagueDone && t.status==='activo' && (
-        <button className="btn primary" style={{marginTop:10}} onClick={finishLeague}>🏆 Finalizar y coronar campeón</button>
+      {(fixtureDone || manualReady) && t.status==='activo' && (
+        <button className={'btn '+(fixtureDone?'primary':'ghost')} style={{marginTop:10}} onClick={finishLeague}>
+          🏆 Finalizar y coronar al líder</button>
       )}
 
       <button className="btn danger" style={{marginTop:24}} onClick={removeTournament}>Eliminar torneo</button>
 
-      {editMatch && <ScoreEditor match={editMatch} teamsById={teamsById}
-        onSave={saveResult} onClose={()=>setEditMatch(null)} />}
+      {editMatch && <ScoreEditor match={editMatch} playersById={playersById} clubs={db.clubs}
+        onSave={saveResult} onDelete={manual ? deleteMatch : null} onClose={()=>setEditMatch(null)} />}
+      {adding && <AddMatchSheet t={t} playersById={playersById} clubs={db.clubs}
+        onSave={addManualMatch} onClose={()=>setAdding(false)} />}
     </React.Fragment>
   );
 }
 
-function MatchList({ t, teamsById, onEdit }) {
+function MatchList({ t, playersById, clubsById, manual, onEdit }) {
   const ms = t.matches.filter(m => m.stage !== 'ko');
+  if (ms.length === 0) return (
+    <div className="empty"><div className="big">📋</div>
+      <p>{manual ? 'Aún no hay partidos registrados.\nToca "Registrar partido" cuando jueguen.' : 'Sin partidos.'}</p></div>
+  );
+  if (manual) {
+    const sorted = [...ms].sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
+    return (
+      <React.Fragment>
+        {sorted.map(m => <MatchRow key={m.id} m={m} playersById={playersById} clubsById={clubsById} onEdit={onEdit} />)}
+      </React.Fragment>
+    );
+  }
   const byRound = {};
   ms.forEach(m => {
     const key = m.group ? `Grupo ${m.group} · Fecha ${m.round}` : `Fecha ${m.round}`;
@@ -940,32 +963,36 @@ function MatchList({ t, teamsById, onEdit }) {
       {keys.map(k => (
         <React.Fragment key={k}>
           <div className="mrow-tag">{k}</div>
-          {byRound[k].map(m => (
-            <div className="mrow" key={m.id} onClick={()=>onEdit(m)} style={{cursor:'pointer'}}>
-              <div className="t"><TeamTag id={m.teamA} teamsById={teamsById} /></div>
-              <div className={'mid'+(m.played?'':' pend')}>
-                {m.played ? `${m.golesA} - ${m.golesB}` : 'VS'}</div>
-              <div className="t right"><TeamTag id={m.teamB} teamsById={teamsById} right /></div>
-            </div>
-          ))}
+          {byRound[k].map(m => <MatchRow key={m.id} m={m} playersById={playersById} clubsById={clubsById} onEdit={onEdit} />)}
         </React.Fragment>
       ))}
     </React.Fragment>
   );
 }
 
-function StandingsTable({ teamIds, matches, teamsById, qualify = 0 }) {
-  const st = computeStandings(teamIds, matches, teamsById);
+function MatchRow({ m, playersById, clubsById, onEdit }) {
+  return (
+    <div className="mrow" onClick={()=>onEdit(m)} style={{cursor:'pointer'}}>
+      <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]?.name} /></div>
+      <div className={'mid'+(m.played?'':' pend')}>
+        {m.played ? `${m.golesA} - ${m.golesB}` : 'VS'}</div>
+      <div className="t right"><PlayerTag id={m.teamB} playersById={playersById} club={clubsById[m.clubB]?.name} right /></div>
+    </div>
+  );
+}
+
+function StandingsTable({ teamIds, matches, playersById, qualify = 0 }) {
+  const st = computeStandings(teamIds, matches, playersById);
   return (
     <table className="table">
       <thead><tr>
-        <th style={{textAlign:'left'}}>Equipo</th>
+        <th style={{textAlign:'left'}}>Jugador</th>
         <th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th>
       </tr></thead>
       <tbody>
         {st.map((s, i) => (
           <tr key={s.id} className={qualify && i < qualify ? 'q' : ''}>
-            <td className="tname"><span className="pos">{i+1}</span> {teamsById[s.id]?.emoji} {teamsById[s.id]?.name}{teamsById[s.id]?.playerName && <span className="pname">· {teamsById[s.id].playerName}</span>}</td>
+            <td className="tname"><span className="pos">{i+1}</span> {playersById[s.id]?.emoji} {playersById[s.id]?.name}</td>
             <td>{s.pj}</td><td>{s.pg}</td><td>{s.pe}</td><td>{s.pp}</td>
             <td>{s.gf - s.gc > 0 ? '+' : ''}{s.gf - s.gc}</td>
             <td className="pts">{s.pts}</td>
@@ -976,14 +1003,14 @@ function StandingsTable({ teamIds, matches, teamsById, qualify = 0 }) {
   );
 }
 
-function GroupTables({ t, teamsById }) {
+function GroupTables({ t, playersById }) {
   return (
     <React.Fragment>
       {Object.keys(t.groups).sort().map(L => (
         <div className="card" key={L}>
           <div className="eyebrow">Grupo {L}</div>
           <StandingsTable teamIds={t.groups[L]} matches={t.matches.filter(m=>m.group===L)}
-            teamsById={teamsById} qualify={t.config.advancePerGroup} />
+            playersById={playersById} qualify={t.config.advancePerGroup} />
         </div>
       ))}
       <p style={{fontSize:11,color:'var(--muted)',textAlign:'center'}}>
@@ -992,7 +1019,7 @@ function GroupTables({ t, teamsById }) {
   );
 }
 
-function Bracket({ matches, teamsById, onEdit }) {
+function Bracket({ matches, playersById, clubsById, onEdit }) {
   if (matches.length === 0) return null;
   const rounds = {};
   matches.forEach(m => (rounds[m.round] = rounds[m.round] || []).push(m));
@@ -1011,8 +1038,10 @@ function Bracket({ matches, teamsById, onEdit }) {
                 <div className="b-match" key={m.id}
                   onClick={()=> clickable && onEdit(m)}
                   style={clickable?{cursor:'pointer'}:{opacity: m.bye?0.65:1}}>
-                  <BSlot id={m.teamA} m={m} g={m.golesA} win={w===m.teamA && m.teamA} teamsById={teamsById} />
-                  <BSlot id={m.teamB} m={m} g={m.golesB} win={w===m.teamB && m.teamB} teamsById={teamsById} />
+                  <BSlot id={m.teamA} m={m} g={m.golesA} club={clubsById[m.clubA]?.name}
+                    win={w===m.teamA && m.teamA} playersById={playersById} />
+                  <BSlot id={m.teamB} m={m} g={m.golesB} club={clubsById[m.clubB]?.name}
+                    win={w===m.teamB && m.teamB} playersById={playersById} />
                   {m.played && m.penA != null &&
                     <div className="b-pens">Penales {m.penA} - {m.penB}</div>}
                   {m.bye && <div className="b-pens" style={{color:'var(--muted)'}}>Pasa directo</div>}
@@ -1026,26 +1055,41 @@ function Bracket({ matches, teamsById, onEdit }) {
   );
 }
 
-function BSlot({ id, m, g, win, teamsById }) {
-  const t = id ? teamsById[id] : null;
+function BSlot({ id, m, g, club, win, playersById }) {
+  const p = id ? playersById[id] : null;
   return (
-    <div className={'b-slot'+(win?' win':'')+(t?'':' tbd')}>
-      {t ? <React.Fragment><span>{t.emoji}</span><span>{t.name}{t.playerName && <span className="pname"> · {t.playerName}</span>}</span></React.Fragment> : 'Por definir'}
+    <div className={'b-slot'+(win?' win':'')+(p?'':' tbd')}>
+      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · {club}</span>}</span></React.Fragment> : 'Por definir'}
       {m.played && !m.bye && <span className="g">{g}</span>}
     </div>
   );
 }
 
-/* ============ EDITOR DE MARCADOR (firma) ============ */
-function ScoreEditor({ match, teamsById, onSave, onClose }) {
+/* ============ SELECTOR DE CLUB ============ */
+function ClubSelect({ value, onChange, clubs }) {
+  return (
+    <select value={value || ''} onChange={e=>onChange(e.target.value || null)}
+      style={{width:'100%',marginTop:6,padding:'8px 10px',background:'var(--surface2)',
+      border:'1px solid var(--line)',borderRadius:10,color:value?'var(--text)':'var(--muted)',
+      fontSize:12,outline:'none'}}>
+      <option value="">¿Con qué club?</option>
+      {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+  );
+}
+
+/* ============ EDITOR DE MARCADOR ============ */
+function ScoreEditor({ match, playersById, clubs, onSave, onDelete, onClose }) {
   const [gA, setGA] = useState(match.golesA ?? 0);
   const [gB, setGB] = useState(match.golesB ?? 0);
   const [pA, setPA] = useState(match.penA ?? 0);
   const [pB, setPB] = useState(match.penB ?? 0);
+  const [cA, setCA] = useState(match.clubA || null);
+  const [cB, setCB] = useState(match.clubB || null);
   const isKO = match.stage === 'ko';
   const needsPens = isKO && gA === gB;
   const pensValid = !needsPens || pA !== pB;
-  const A = teamsById[match.teamA], B = teamsById[match.teamB];
+  const A = playersById[match.teamA], B = playersById[match.teamB];
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -1057,7 +1101,7 @@ function ScoreEditor({ match, teamsById, onSave, onClose }) {
             <div className="sb-team">
               <div className="shield">{A?.emoji}</div>
               <div className="name">{A?.name}</div>
-              {A?.playerName && <div className="pname">🎮 {A.playerName}</div>}
+              <ClubSelect value={cA} onChange={setCA} clubs={clubs} />
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gA}</div>
                 <div className="ctrl">
@@ -1070,7 +1114,7 @@ function ScoreEditor({ match, teamsById, onSave, onClose }) {
             <div className="sb-team">
               <div className="shield">{B?.emoji}</div>
               <div className="name">{B?.name}</div>
-              {B?.playerName && <div className="pname">🎮 {B.playerName}</div>}
+              <ClubSelect value={cB} onChange={setCB} clubs={clubs} />
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gB}</div>
                 <div className="ctrl">
@@ -1108,10 +1152,95 @@ function ScoreEditor({ match, teamsById, onSave, onClose }) {
         )}
 
         <button className="btn primary" style={{marginTop:14}} disabled={!pensValid}
-          onClick={()=>onSave(match.id, gA, gB, needsPens?pA:null, needsPens?pB:null)}>
+          onClick={()=>onSave(match.id, gA, gB, needsPens?pA:null, needsPens?pB:null, cA, cB)}>
           ✅ Guardar resultado</button>
-        {match.played && <p style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:10}}>
+        {onDelete && match.played && (
+          <button className="btn danger" style={{marginTop:10}} onClick={()=>onDelete(match.id)}>
+            Eliminar partido</button>
+        )}
+        {match.played && isKO && <p style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:10}}>
           Editar un resultado ya jugado recalcula las llaves siguientes.</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ============ REGISTRAR PARTIDO (liga libre) ============ */
+function AddMatchSheet({ t, playersById, clubs, onSave, onClose }) {
+  const [pA, setPA] = useState(null);
+  const [pB, setPB] = useState(null);
+  const [gA, setGA] = useState(0);
+  const [gB, setGB] = useState(0);
+  const [cA, setCA] = useState(null);
+  const [cB, setCB] = useState(null);
+  const valid = pA && pB && pA !== pB;
+  const A = pA ? playersById[pA] : null;
+  const B = pB ? playersById[pB] : null;
+
+  const PlayerPick = ({ value, onChange, exclude }) => (
+    <div className="chips" style={{justifyContent:'center'}}>
+      {t.teamIds.filter(id => id !== exclude).map(id => (
+        <button key={id} className={'chip'+(value===id?' on':'')} onClick={()=>onChange(id)}>
+          {playersById[id]?.emoji} {playersById[id]?.name}</button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h2 className="display">Registrar partido</h2>
+        {(!pA || !pB) ? (
+          <React.Fragment>
+            <div className="field">
+              <label>¿Quién juega de local?</label>
+              <PlayerPick value={pA} onChange={setPA} exclude={pB} />
+            </div>
+            <div className="field">
+              <label>¿Contra quién?</label>
+              <PlayerPick value={pB} onChange={setPB} exclude={pA} />
+            </div>
+          </React.Fragment>
+        ) : (
+          <React.Fragment>
+            <div className="sb-meta">
+              <button onClick={()=>{setPA(null);setPB(null);}} style={{color:'var(--volt)',fontSize:11}}>
+                ← cambiar jugadores</button>
+            </div>
+            <div className="scoreboard">
+              <div className="sb-teams">
+                <div className="sb-team">
+                  <div className="shield">{A?.emoji}</div>
+                  <div className="name">{A?.name}</div>
+                  <ClubSelect value={cA} onChange={setCA} clubs={clubs} />
+                  <div className="stepper" style={{marginTop:10}}>
+                    <div className="val">{gA}</div>
+                    <div className="ctrl">
+                      <button onClick={()=>setGA(Math.max(0,gA-1))}>−</button>
+                      <button onClick={()=>setGA(gA+1)}>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="sb-vs">VS</div>
+                <div className="sb-team">
+                  <div className="shield">{B?.emoji}</div>
+                  <div className="name">{B?.name}</div>
+                  <ClubSelect value={cB} onChange={setCB} clubs={clubs} />
+                  <div className="stepper" style={{marginTop:10}}>
+                    <div className="val">{gB}</div>
+                    <div className="ctrl">
+                      <button onClick={()=>setGB(Math.max(0,gB-1))}>−</button>
+                      <button onClick={()=>setGB(gB+1)}>+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </React.Fragment>
+        )}
+        <button className="btn primary" style={{marginTop:14}} disabled={!valid}
+          onClick={()=>onSave(pA, pB, gA, gB, cA, cB)}>✅ Guardar partido</button>
       </div>
     </div>
   );
