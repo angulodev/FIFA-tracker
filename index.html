@@ -208,6 +208,11 @@ input,select{font-family:inherit;font-size:16px}
   border-bottom:1px solid var(--line);font-size:14px;font-weight:600;text-align:left}
 .club-item.on{color:var(--volt)}
 .club-item .chk{margin-left:auto;color:var(--volt)}
+.hint{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.45;
+  padding:8px 10px;background:var(--surface);border-left:2px solid var(--volt-dim);border-radius:0 8px 8px 0}
+.cbadge{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;
+  border:1.5px solid;color:#fff;font-weight:800;vertical-align:-3px;flex:none;
+  font-family:'Archivo';letter-spacing:-.02em;margin-right:4px}
 </style>
 </head>
 <body>
@@ -452,6 +457,11 @@ const uiConfirm = (message, opts={}) => new Promise(res => _setDialog({ type:'co
 const uiAlert = (message) => new Promise(res => _setDialog({ type:'alert', message, resolve:res }));
 const fmtDate = (ts) => new Date(ts).toLocaleDateString('es-CL', { day:'numeric', month:'short' });
 const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
+const FORMAT_DESC = {
+  liga: '📊 Todos suman puntos en una tabla: 3 por ganar, 1 por empatar. Cuando se juegan todos los partidos, el líder es el campeón. Ideal para juntadas largas.',
+  eliminatoria: '⚔️ Llaves de eliminación directa: el que pierde queda afuera y el que gana avanza hasta la final. Si hay empate, se define a penales. Rápido y a todo o nada.',
+  grupos: '🌍 Estilo Mundial: primero fase de grupos donde todos suman puntos, los 2 mejores de cada grupo clasifican a llaves de eliminación hasta la final.'
+};
 
 function App() {
   const [db, setDb] = useState(loadDB);
@@ -510,12 +520,30 @@ function PlayerTag({ id, playersById, club, right }) {
   if (!p) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
   const label = (
     <span className="nm">{p.name}
-      {club && <span className="pname"> · {club}</span>}
+      {club && <span className="pname"> · <ClubBadge name={club} size={13} /> {club}</span>}
     </span>
   );
   return right
     ? <React.Fragment>{label}<span>{p.emoji}</span></React.Fragment>
     : <React.Fragment><span>{p.emoji}</span>{label}</React.Fragment>;
+}
+
+/* ============ INSIGNIA DE CLUB (generada por nombre) ============ */
+function clubHue(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+function ClubBadge({ name, size = 16 }) {
+  if (!name) return null;
+  const words = name.replace(/[^A-Za-zÀ-ÿ0-9 ]/g, '').split(/\s+/).filter(Boolean);
+  const initials = (words.length === 1 ? words[0].slice(0, 3)
+    : words.map(w => w[0]).join('').slice(0, 3)).toUpperCase();
+  const hue = clubHue(name);
+  return (
+    <span className="cbadge" style={{ width: size, height: size, fontSize: Math.round(size * 0.42),
+      background: `hsl(${hue} 55% 26%)`, borderColor: `hsl(${hue} 75% 48%)` }}>{initials}</span>
+  );
 }
 
 /* ============ DIÁLOGOS (no nativos) ============ */
@@ -729,7 +757,7 @@ function PlayersView({ db, update }) {
       </div>
       <div className="chips">
         {db.clubs.map(c => (
-          <span key={c.id} className="chip">{c.name}
+          <span key={c.id} className="chip"><ClubBadge name={c.name} size={16} /> {c.name}
             <button onClick={()=>removeClub(c.id)} style={{marginLeft:6,color:'var(--muted)'}}>✕</button></span>
         ))}
       </div>
@@ -824,6 +852,7 @@ function NewTournament({ db, update }) {
           <button className={'chip'+(format==='eliminatoria'?' on':'')} onClick={()=>setFormat('eliminatoria')}>Eliminatoria</button>
           <button className={'chip'+(format==='grupos'?' on':'')} onClick={()=>setFormat('grupos')}>Grupos + Copa</button>
         </div>
+        <p className="hint">{FORMAT_DESC[format]}</p>
       </div>
       {format === 'liga' && (
         <React.Fragment>
@@ -833,8 +862,9 @@ function NewTournament({ db, update }) {
               <button className={'chip'+(fixtureMode==='sorteo'?' on':'')} onClick={()=>setFixtureMode('sorteo')}>🎲 Sorteo automático</button>
               <button className={'chip'+(fixtureMode==='manual'?' on':'')} onClick={()=>setFixtureMode('manual')}>✍️ Yo armo los partidos</button>
             </div>
-            {fixtureMode==='manual' && <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
-              Sin fixture fijo: agregas cada partido cuando se juega. La tabla se arma sola.</p>}
+            <p className="hint">{fixtureMode==='manual'
+              ? '✍️ Sin fixture fijo: tú registras cada partido cuando se juega y eliges los cruces. La tabla se arma sola. Perfecto si juegan a su ritmo.'
+              : '🎲 La app genera todos los cruces automáticamente: todos contra todos, repartidos en fechas.'}</p>
           </div>
           {fixtureMode === 'sorteo' && (
             <div className="field">
@@ -1154,7 +1184,7 @@ function BSlot({ id, m, g, club, win, playersById }) {
   const p = id ? playersById[id] : null;
   return (
     <div className={'b-slot'+(win?' win':'')+(p?'':' tbd')}>
-      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · {club}</span>}</span></React.Fragment> : 'Por definir'}
+      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · <ClubBadge name={club} size={13} /> {club}</span>}</span></React.Fragment> : 'Por definir'}
       {m.played && !m.bye && <span className="g">{g}</span>}
     </div>
   );
@@ -1167,7 +1197,7 @@ function ClubField({ value, onChange, clubs, onAddClub }) {
   return (
     <React.Fragment>
       <button className={'club-btn'+(current?' set':'')} onClick={()=>setOpen(true)}>
-        {current ? current.name : '¿Con qué club?'}</button>
+        {current ? <React.Fragment><ClubBadge name={current.name} size={18} /> {current.name}</React.Fragment> : '¿Con qué club?'}</button>
       {open && <ClubSheet clubs={clubs} value={value} onAddClub={onAddClub}
         onPick={id=>{ onChange(id); setOpen(false); }} onClose={()=>setOpen(false)} />}
     </React.Fragment>
@@ -1192,7 +1222,7 @@ function ClubSheet({ clubs, value, onPick, onAddClub, onClose }) {
             Sin club{!value && <span className="chk">✓</span>}</button>
           {filtered.map(c => (
             <button key={c.id} className={'club-item'+(value===c.id?' on':'')} onClick={()=>onPick(c.id)}>
-              {c.name}{value===c.id && <span className="chk">✓</span>}</button>
+              <ClubBadge name={c.name} size={22} /> {c.name}{value===c.id && <span className="chk">✓</span>}</button>
           ))}
           {query && !exact && (
             <button className="club-item" style={{color:'var(--volt)'}}
