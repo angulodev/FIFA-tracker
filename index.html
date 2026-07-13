@@ -213,6 +213,8 @@ input,select{font-family:inherit;font-size:16px}
 .cbadge{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;
   border:1.5px solid;color:#fff;font-weight:800;vertical-align:-3px;flex:none;
   font-family:'Archivo';letter-spacing:-.02em;margin-right:4px}
+.clogo{object-fit:contain;vertical-align:-4px;margin-right:4px;flex:none;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
 </style>
 </head>
 <body>
@@ -222,9 +224,26 @@ input,select{font-family:inherit;font-size:16px}
 const LS_KEY = 'fifa_tracker_v1';
 const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 
-const DEFAULT_CLUBS = ['PSG','Real Madrid','Barcelona','Manchester City','Liverpool','Bayern Múnich',
-  'Colo-Colo','U. de Chile','U. Católica','Boca Juniors','River Plate','Milan','Inter','Juventus',
-  'Arsenal','Chelsea','Atlético Madrid','Borussia Dortmund'];
+const DEFAULT_CLUBS = [
+  { name: 'PSG', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Paris%20Saint-Germain.png' },
+  { name: 'Real Madrid', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Real%20Madrid.png' },
+  { name: 'Barcelona', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/FC%20Barcelona.png' },
+  { name: 'Manchester City', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Manchester%20City.png' },
+  { name: 'Liverpool', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Liverpool%20FC.png' },
+  { name: 'Bayern Múnich', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Bayern%20Munich.png' },
+  { name: 'Colo-Colo' },
+  { name: 'U. de Chile', logo: 'https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/cl-chile/udechile.gif' },
+  { name: 'U. Católica', logo: 'https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/cl-chile/cduc.png' },
+  { name: 'Boca Juniors', logo: 'https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/bocajuniors.png' },
+  { name: 'River Plate', logo: 'https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/riverplate.png' },
+  { name: 'Milan', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/AC%20Milan.png' },
+  { name: 'Inter', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Inter%20Milan.png' },
+  { name: 'Juventus', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Juventus%20FC.png' },
+  { name: 'Arsenal', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Arsenal%20FC.png' },
+  { name: 'Chelsea', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Chelsea%20FC.png' },
+  { name: 'Atlético Madrid', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Atl%C3%A9tico%20de%20Madrid.png' },
+  { name: 'Borussia Dortmund', logo: 'https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Borussia%20Dortmund.png' }
+];
 
 const loadDB = () => {
   let d;
@@ -238,8 +257,16 @@ const loadDB = () => {
     });
   }
   players = players.map(p => ({ emoji: '🎮', ...p }));
-  const clubs = d.clubs && d.clubs.length ? d.clubs
-    : DEFAULT_CLUBS.map(n => ({ id: uid(), name: n }));
+  let clubs = d.clubs && d.clubs.length ? d.clubs
+    : DEFAULT_CLUBS.map(c => ({ id: uid(), ...c }));
+  // Backfill: si un club existente coincide con el catálogo y no tiene logo, asignárselo
+  clubs = clubs.map(c => {
+    if (!c.logo) {
+      const known = DEFAULT_CLUBS.find(k => k.logo && k.name.toLowerCase() === c.name.toLowerCase());
+      if (known) return { ...c, logo: known.logo };
+    }
+    return c;
+  });
   const tournaments = (d.tournaments || []).map(t => ({
     ...t, config: { fixtureMode: 'sorteo', ...(t.config || {}) } }));
   return { players, clubs, tournaments };
@@ -520,7 +547,7 @@ function PlayerTag({ id, playersById, club, right }) {
   if (!p) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
   const label = (
     <span className="nm">{p.name}
-      {club && <span className="pname"> · <ClubBadge name={club} size={13} /> {club}</span>}
+      {club && <span className="pname"> · <ClubBadge name={club.name} logo={club.logo} size={13} /> {club.name}</span>}
     </span>
   );
   return right
@@ -534,8 +561,13 @@ function clubHue(name) {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
   return h;
 }
-function ClubBadge({ name, size = 16 }) {
+function ClubBadge({ name, logo, size = 16 }) {
+  const [failed, setFailed] = useState(false);
   if (!name) return null;
+  if (logo && !failed) {
+    return <img className="clogo" src={logo} alt={name} loading="lazy"
+      style={{ width: size + 4, height: size + 4 }} onError={()=>setFailed(true)} />;
+  }
   const words = name.replace(/[^A-Za-zÀ-ÿ0-9 ]/g, '').split(/\s+/).filter(Boolean);
   const initials = (words.length === 1 ? words[0].slice(0, 3)
     : words.map(w => w[0]).join('').slice(0, 3)).toUpperCase();
@@ -614,9 +646,9 @@ function Dashboard({ db, playersById, clubsById }) {
           <div className="section-title">Últimos resultados</div>
           {lastPlayed.map(m => (
             <div className="mrow" key={m.id}>
-              <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]?.name} /></div>
+              <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]} /></div>
               <div className="mid">{m.golesA} - {m.golesB}</div>
-              <div className="t right"><PlayerTag id={m.teamB} playersById={playersById} club={clubsById[m.clubB]?.name} right /></div>
+              <div className="t right"><PlayerTag id={m.teamB} playersById={playersById} club={clubsById[m.clubB]} right /></div>
             </div>
           ))}
         </React.Fragment>
@@ -671,7 +703,7 @@ function TournamentsList({ db, playersById }) {
 /* ============ JUGADORES & CLUBES ============ */
 function PlayersView({ db, update }) {
   const [editing, setEditing] = useState(null);
-  const [newClub, setNewClub] = useState('');
+  const [editingClub, setEditingClub] = useState(null);
   const [dialog, setDialog] = useState(null);
   const fileRef = useRef(null);
 
@@ -691,15 +723,21 @@ function PlayersView({ db, update }) {
       update(d => { d.players = d.players.filter(p => p.id !== id); return d; });
   };
 
-  const addClub = () => {
-    const name = newClub.trim();
-    if (!name) return;
-    if (db.clubs.some(c => c.name.toLowerCase() === name.toLowerCase())) { setNewClub(''); return; }
-    update(d => { d.clubs.push({ id: uid(), name }); return d; });
-    setNewClub('');
+  const saveClub = (club) => {
+    update(d => {
+      if (club.id) { const i = d.clubs.findIndex(x => x.id === club.id); d.clubs[i] = club; }
+      else d.clubs.push({ ...club, id: uid() });
+      return d;
+    });
+    setEditingClub(null);
   };
-  const removeClub = (id) => {
-    update(d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
+  const deleteClub = (id) => {
+    const name = db.clubs.find(c => c.id === id)?.name;
+    setDialog({ message:`¿Eliminar el club ${name}? Los partidos ya jugados lo dejarán de mostrar.`,
+      danger:true, confirmLabel:'Eliminar', onConfirm: () => {
+        update(d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
+        setEditingClub(null);
+      }});
   };
 
   const exportData = () => {
@@ -747,18 +785,12 @@ function PlayersView({ db, update }) {
 
       <div className="section-title">Clubes ({db.clubs.length})</div>
       <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
-        El club se elige en cada partido: hoy juegas con PSG, mañana con otro.</p>
-      <div className="row" style={{marginBottom:10}}>
-        <input value={newClub} onChange={e=>setNewClub(e.target.value)}
-          onKeyDown={e=>e.key==='Enter'&&addClub()}
-          placeholder="Agregar club..." style={{flex:1,padding:'11px 14px',background:'var(--surface2)',
-          border:'1px solid var(--line)',borderRadius:12,color:'var(--text)',outline:'none'}} />
-        <button className="btn ghost sm" onClick={addClub}>＋</button>
-      </div>
+        El club se elige en cada partido. Toca un club para editarlo o ponerle escudo.</p>
+      <button className="btn ghost" style={{marginBottom:10}} onClick={()=>setEditingClub({ name:'', logo:'' })}>+ Nuevo club</button>
       <div className="chips">
         {db.clubs.map(c => (
-          <span key={c.id} className="chip"><ClubBadge name={c.name} size={16} /> {c.name}
-            <button onClick={()=>removeClub(c.id)} style={{marginLeft:6,color:'var(--muted)'}}>✕</button></span>
+          <button key={c.id} className="chip" onClick={()=>setEditingClub(c)}>
+            <ClubBadge name={c.name} logo={c.logo} size={16} /> {c.name}</button>
         ))}
       </div>
 
@@ -772,6 +804,7 @@ function PlayersView({ db, update }) {
       </div>
 
       {editing && <PlayerEditor player={editing} onSave={savePlayer} onClose={()=>setEditing(null)} />}
+      {editingClub && <ClubEditor club={editingClub} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditingClub(null)} />}
       <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
@@ -799,6 +832,37 @@ function PlayerEditor({ player, onSave, onClose }) {
         </div>
         <button className="btn primary" disabled={!name.trim()}
           onClick={()=>onSave({ ...player, name: name.trim(), emoji })}>Guardar jugador</button>
+      </div>
+    </div>
+  );
+}
+
+function ClubEditor({ club, onSave, onDelete, onClose }) {
+  const [name, setName] = useState(club.name);
+  const [logo, setLogo] = useState(club.logo || '');
+  const preview = logo.trim();
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h2 className="display">{club.id ? 'Editar club' : 'Nuevo club'}</h2>
+        <div style={{textAlign:'center',marginBottom:14}}>
+          <ClubBadge key={preview} name={name || '?'} logo={preview || null} size={56} />
+        </div>
+        <div className="field">
+          <label>Nombre</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Colo-Colo" autoFocus />
+        </div>
+        <div className="field">
+          <label>URL del escudo (opcional)</label>
+          <input value={logo} onChange={e=>setLogo(e.target.value)} placeholder="https://... .png"
+            style={{fontSize:12}} />
+          <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+            Busca el escudo en la web (ej: footylogos.com), mantén presionada la imagen → "Copiar dirección de imagen" y pégala aquí. Si queda vacío se usa la insignia con iniciales.</p>
+        </div>
+        <button className="btn primary" disabled={!name.trim()}
+          onClick={()=>onSave({ ...club, name: name.trim(), logo: preview || null })}>Guardar club</button>
+        {club.id && <button className="btn danger" style={{marginTop:10}} onClick={()=>onDelete(club.id)}>Eliminar club</button>}
       </div>
     </div>
   );
@@ -1098,10 +1162,10 @@ function MatchList({ t, playersById, clubsById, manual, onEdit }) {
 function MatchRow({ m, playersById, clubsById, onEdit }) {
   return (
     <div className="mrow" onClick={()=>onEdit(m)} style={{cursor:'pointer'}}>
-      <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]?.name} /></div>
+      <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]} /></div>
       <div className={'mid'+(m.played?'':' pend')}>
         {m.played ? `${m.golesA} - ${m.golesB}` : 'VS'}</div>
-      <div className="t right"><PlayerTag id={m.teamB} playersById={playersById} club={clubsById[m.clubB]?.name} right /></div>
+      <div className="t right"><PlayerTag id={m.teamB} playersById={playersById} club={clubsById[m.clubB]} right /></div>
     </div>
   );
 }
@@ -1163,9 +1227,9 @@ function Bracket({ matches, playersById, clubsById, onEdit }) {
                 <div className="b-match" key={m.id}
                   onClick={()=> clickable && onEdit(m)}
                   style={clickable?{cursor:'pointer'}:{opacity: m.bye?0.65:1}}>
-                  <BSlot id={m.teamA} m={m} g={m.golesA} club={clubsById[m.clubA]?.name}
+                  <BSlot id={m.teamA} m={m} g={m.golesA} club={clubsById[m.clubA]}
                     win={w===m.teamA && m.teamA} playersById={playersById} />
-                  <BSlot id={m.teamB} m={m} g={m.golesB} club={clubsById[m.clubB]?.name}
+                  <BSlot id={m.teamB} m={m} g={m.golesB} club={clubsById[m.clubB]}
                     win={w===m.teamB && m.teamB} playersById={playersById} />
                   {m.played && m.penA != null &&
                     <div className="b-pens">Penales {m.penA} - {m.penB}</div>}
@@ -1184,7 +1248,7 @@ function BSlot({ id, m, g, club, win, playersById }) {
   const p = id ? playersById[id] : null;
   return (
     <div className={'b-slot'+(win?' win':'')+(p?'':' tbd')}>
-      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · <ClubBadge name={club} size={13} /> {club}</span>}</span></React.Fragment> : 'Por definir'}
+      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · <ClubBadge name={club.name} logo={club.logo} size={13} /> {club.name}</span>}</span></React.Fragment> : 'Por definir'}
       {m.played && !m.bye && <span className="g">{g}</span>}
     </div>
   );
@@ -1197,7 +1261,7 @@ function ClubField({ value, onChange, clubs, onAddClub }) {
   return (
     <React.Fragment>
       <button className={'club-btn'+(current?' set':'')} onClick={()=>setOpen(true)}>
-        {current ? <React.Fragment><ClubBadge name={current.name} size={18} /> {current.name}</React.Fragment> : '¿Con qué club?'}</button>
+        {current ? <React.Fragment><ClubBadge name={current.name} logo={current.logo} size={18} /> {current.name}</React.Fragment> : '¿Con qué club?'}</button>
       {open && <ClubSheet clubs={clubs} value={value} onAddClub={onAddClub}
         onPick={id=>{ onChange(id); setOpen(false); }} onClose={()=>setOpen(false)} />}
     </React.Fragment>
@@ -1222,7 +1286,7 @@ function ClubSheet({ clubs, value, onPick, onAddClub, onClose }) {
             Sin club{!value && <span className="chk">✓</span>}</button>
           {filtered.map(c => (
             <button key={c.id} className={'club-item'+(value===c.id?' on':'')} onClick={()=>onPick(c.id)}>
-              <ClubBadge name={c.name} size={22} /> {c.name}{value===c.id && <span className="chk">✓</span>}</button>
+              <ClubBadge name={c.name} logo={c.logo} size={22} /> {c.name}{value===c.id && <span className="chk">✓</span>}</button>
           ))}
           {query && !exact && (
             <button className="club-item" style={{color:'var(--volt)'}}
