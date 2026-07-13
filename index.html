@@ -110,6 +110,21 @@ input,select{font-family:inherit;font-size:16px}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:50;
   display:flex;align-items:flex-end;justify-content:center}
+.overlay.z2{z-index:60}
+.overlay.center{align-items:center;padding:24px}
+.dialog{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);
+  border-radius:18px;padding:20px;animation:fadeIn .15s ease}
+.dialog .msg{font-size:14px;line-height:1.5;margin-bottom:18px}
+.dialog .actions{display:flex;gap:10px}
+.dialog .actions button{flex:1;padding:12px;border-radius:12px;font-weight:700;font-size:14px}
+.dialog .actions .cancel{background:var(--surface2);border:1px solid var(--line);color:var(--text)}
+.dialog .actions .ok{background:var(--volt);color:#0B140E}
+.dialog .actions .ok.destructive{background:var(--danger);color:#fff}
+.club-btn{width:100%;margin-top:6px;padding:8px 10px;background:var(--surface2);
+  border:1px solid var(--line);border-radius:10px;font-size:12px;text-align:center}
+.club-list button{display:flex;width:100%;align-items:center;justify-content:space-between;
+  padding:13px 4px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;text-align:left}
+.club-list button.sel{color:var(--volt)}
 .sheet{width:100%;max-width:520px;background:var(--surface);border-radius:22px 22px 0 0;
   border:1px solid var(--line);border-bottom:none;padding:20px 18px calc(24px + env(safe-area-inset-bottom));
   max-height:88vh;overflow-y:auto;animation:slideUp .22s ease}
@@ -175,6 +190,24 @@ input,select{font-family:inherit;font-size:16px}
 .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
 .emoji-grid button{font-size:24px;padding:8px 0;border-radius:10px;background:var(--surface2);border:1px solid var(--line)}
 .emoji-grid button.on{border-color:var(--volt);background:rgba(200,241,53,.12)}
+
+/* Diálogos no nativos */
+.overlay.center{align-items:center;padding:24px}
+.dialog{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);
+  border-radius:18px;padding:20px;animation:fadeIn .15s ease}
+.dialog h3{font-family:'Anton';font-size:15px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px}
+.dialog p{font-size:14px;line-height:1.45;color:var(--text);margin-bottom:16px}
+.btn.danger-solid{background:var(--danger);color:#fff}
+
+/* Selector de club */
+.club-btn{width:100%;margin-top:6px;padding:9px 10px;background:var(--surface2);
+  border:1px solid var(--line);border-radius:10px;font-size:12px;color:var(--muted)}
+.club-btn.set{color:var(--volt);border-color:var(--volt-dim);font-weight:700}
+.club-list{max-height:42vh;overflow-y:auto;margin-bottom:8px}
+.club-item{display:flex;align-items:center;width:100%;padding:13px 10px;
+  border-bottom:1px solid var(--line);font-size:14px;font-weight:600;text-align:left}
+.club-item.on{color:var(--volt)}
+.club-item .chk{margin-left:auto;color:var(--volt)}
 </style>
 </head>
 <body>
@@ -394,6 +427,29 @@ function useHashRoute() {
   return hash;
 }
 const go = (h) => { window.location.hash = h; };
+
+/* Diálogos propios (reemplazan confirm/alert nativos) */
+let _setDialog = null;
+function DialogHost() {
+  const [dlg, setDlg] = useState(null);
+  _setDialog = setDlg;
+  if (!dlg) return null;
+  const close = (val) => { setDlg(null); dlg.resolve(val); };
+  return (
+    <div className="overlay center z2" onClick={()=>close(false)}>
+      <div className="dialog" onClick={e=>e.stopPropagation()}>
+        <div className="msg">{dlg.message}</div>
+        <div className="actions">
+          {dlg.type === 'confirm' && <button className="cancel" onClick={()=>close(false)}>Cancelar</button>}
+          <button className={'ok'+(dlg.destructive?' destructive':'')} onClick={()=>close(true)}>
+            {dlg.type === 'confirm' ? (dlg.okLabel || 'Aceptar') : 'Entendido'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+const uiConfirm = (message, opts={}) => new Promise(res => _setDialog({ type:'confirm', message, resolve:res, ...opts }));
+const uiAlert = (message) => new Promise(res => _setDialog({ type:'alert', message, resolve:res }));
 const fmtDate = (ts) => new Date(ts).toLocaleDateString('es-CL', { day:'numeric', month:'short' });
 const FORMATS = { liga:'Liga', eliminatoria:'Eliminatoria', grupos:'Grupos + Copa' };
 
@@ -435,6 +491,7 @@ function App() {
         <div style={{fontSize:28}}>⚽</div>
       </div>
       <div className="screen">{screen}</div>
+      <DialogHost />
       <nav className="nav">
         <button className={tab==='inicio'?'active':''} onClick={()=>go('#/')}>
           <span className="ico">🏟️</span>Inicio</button>
@@ -459,6 +516,31 @@ function PlayerTag({ id, playersById, club, right }) {
   return right
     ? <React.Fragment>{label}<span>{p.emoji}</span></React.Fragment>
     : <React.Fragment><span>{p.emoji}</span>{label}</React.Fragment>;
+}
+
+/* ============ DIÁLOGOS (no nativos) ============ */
+function Dialog({ d, onClose }) {
+  if (!d) return null;
+  const isConfirm = !!d.onConfirm;
+  return (
+    <div className="overlay center" style={{zIndex:70}} onClick={onClose}>
+      <div className="dialog" onClick={e=>e.stopPropagation()}>
+        <h3 className="display">{d.title || (isConfirm ? 'Confirmar' : 'Aviso')}</h3>
+        <p>{d.message}</p>
+        <div className="row">
+          {isConfirm ? (
+            <React.Fragment>
+              <button className="btn ghost sm" style={{flex:1}} onClick={onClose}>Cancelar</button>
+              <button className={'btn sm '+(d.danger?'danger-solid':'primary')} style={{flex:1}}
+                onClick={()=>{ d.onConfirm(); onClose(); }}>{d.confirmLabel || 'Aceptar'}</button>
+            </React.Fragment>
+          ) : (
+            <button className="btn primary sm" style={{flex:1}} onClick={onClose}>Entendido</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ============ DASHBOARD ============ */
@@ -562,6 +644,7 @@ function TournamentsList({ db, playersById }) {
 function PlayersView({ db, update }) {
   const [editing, setEditing] = useState(null);
   const [newClub, setNewClub] = useState('');
+  const [dialog, setDialog] = useState(null);
   const fileRef = useRef(null);
 
   const usedIn = (pid) => db.tournaments.some(t => t.teamIds.includes(pid));
@@ -574,9 +657,10 @@ function PlayersView({ db, update }) {
     });
     setEditing(null);
   };
-  const removePlayer = (id) => {
-    if (usedIn(id)) { alert('Este jugador participa en torneos. No se puede eliminar.'); return; }
-    if (confirm('¿Eliminar jugador?')) update(d => { d.players = d.players.filter(p => p.id !== id); return d; });
+  const removePlayer = async (id) => {
+    if (usedIn(id)) { uiAlert('Este jugador participa en torneos. No se puede eliminar.'); return; }
+    if (await uiConfirm('¿Eliminar jugador?', { destructive:true, okLabel:'Eliminar' }))
+      update(d => { d.players = d.players.filter(p => p.id !== id); return d; });
   };
 
   const addClub = () => {
@@ -601,15 +685,15 @@ function PlayersView({ db, update }) {
     const f = e.target.files[0];
     if (!f) return;
     const r = new FileReader();
-    r.onload = () => {
+    r.onload = async () => {
       try {
         const data = JSON.parse(r.result);
         if (!data.players && !data.teams) throw new Error();
-        if (confirm('Esto reemplaza todos los datos actuales. ¿Continuar?')) {
+        if (await uiConfirm('Esto reemplaza todos los datos actuales. ¿Continuar?', { destructive:true, okLabel:'Reemplazar' })) {
           localStorage.setItem(LS_KEY, r.result);
           update(() => loadDB());
         }
-      } catch { alert('El archivo no es un respaldo válido.'); }
+      } catch { uiAlert('El archivo no es un respaldo válido.'); }
     };
     r.readAsText(f);
     e.target.value = '';
@@ -660,6 +744,7 @@ function PlayersView({ db, update }) {
       </div>
 
       {editing && <PlayerEditor player={editing} onSave={savePlayer} onClose={()=>setEditing(null)} />}
+      <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
 }
@@ -800,6 +885,15 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
   const [tab, setTab] = useState(isKO ? 'bracket' : 'partidos');
   const [editMatch, setEditMatch] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [dialog, setDialog] = useState(null);
+
+  const addClub = (name) => {
+    const existing = db.clubs.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) return existing.id;
+    const id = uid();
+    update(d => { d.clubs.push({ id, name }); return d; });
+    return id;
+  };
 
   const groupsDone = isGroups && t.matches.filter(m => m.stage==='grupos').every(m => m.played);
 
@@ -836,8 +930,8 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
     setAdding(false);
   };
 
-  const deleteMatch = (matchId) => {
-    if (!confirm('¿Eliminar este partido?')) return;
+  const deleteMatch = async (matchId) => {
+    if (!await uiConfirm('¿Eliminar este partido?', { destructive:true, okLabel:'Eliminar' })) return;
     update(d => {
       const tt = d.tournaments.find(x => x.id === t.id);
       tt.matches = tt.matches.filter(m => m.id !== matchId);
@@ -857,9 +951,9 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
     setTab('bracket');
   };
 
-  const finishLeague = () => {
+  const finishLeague = async () => {
     const st = computeStandings(t.teamIds, t.matches, playersById);
-    if (confirm(`Finalizar torneo y coronar a ${playersById[st[0].id]?.name}?`)) {
+    if (await uiConfirm(`¿Finalizar torneo y coronar a ${playersById[st[0].id]?.name}? 🏆`, { okLabel:'Coronar' })) {
       update(d => {
         const tt = d.tournaments.find(x => x.id === t.id);
         tt.status = 'finalizado'; tt.champion = st[0].id;
@@ -868,8 +962,8 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
     }
   };
 
-  const removeTournament = () => {
-    if (confirm('¿Eliminar este torneo y todos sus partidos? No se puede deshacer.')) {
+  const removeTournament = async () => {
+    if (await uiConfirm('¿Eliminar este torneo y todos sus partidos? No se puede deshacer.', { destructive:true, okLabel:'Eliminar' })) {
       update(d => { d.tournaments = d.tournaments.filter(x => x.id !== t.id); return d; });
       go('#/torneos');
     }
@@ -926,10 +1020,11 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
 
       <button className="btn danger" style={{marginTop:24}} onClick={removeTournament}>Eliminar torneo</button>
 
-      {editMatch && <ScoreEditor match={editMatch} playersById={playersById} clubs={db.clubs}
+      {editMatch && <ScoreEditor match={editMatch} playersById={playersById} clubs={db.clubs} onAddClub={addClub}
         onSave={saveResult} onDelete={manual ? deleteMatch : null} onClose={()=>setEditMatch(null)} />}
-      {adding && <AddMatchSheet t={t} playersById={playersById} clubs={db.clubs}
+      {adding && <AddMatchSheet t={t} playersById={playersById} clubs={db.clubs} onAddClub={addClub}
         onSave={addManualMatch} onClose={()=>setAdding(false)} />}
+      <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
 }
@@ -1066,20 +1161,52 @@ function BSlot({ id, m, g, club, win, playersById }) {
 }
 
 /* ============ SELECTOR DE CLUB ============ */
-function ClubSelect({ value, onChange, clubs }) {
+function ClubField({ value, onChange, clubs, onAddClub }) {
+  const [open, setOpen] = useState(false);
+  const current = clubs.find(c => c.id === value);
   return (
-    <select value={value || ''} onChange={e=>onChange(e.target.value || null)}
-      style={{width:'100%',marginTop:6,padding:'8px 10px',background:'var(--surface2)',
-      border:'1px solid var(--line)',borderRadius:10,color:value?'var(--text)':'var(--muted)',
-      fontSize:12,outline:'none'}}>
-      <option value="">¿Con qué club?</option>
-      {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-    </select>
+    <React.Fragment>
+      <button className={'club-btn'+(current?' set':'')} onClick={()=>setOpen(true)}>
+        {current ? current.name : '¿Con qué club?'}</button>
+      {open && <ClubSheet clubs={clubs} value={value} onAddClub={onAddClub}
+        onPick={id=>{ onChange(id); setOpen(false); }} onClose={()=>setOpen(false)} />}
+    </React.Fragment>
+  );
+}
+
+function ClubSheet({ clubs, value, onPick, onAddClub, onClose }) {
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const filtered = query ? clubs.filter(c=>c.name.toLowerCase().includes(query)) : clubs;
+  const exact = clubs.some(c=>c.name.toLowerCase()===query);
+  return (
+    <div className="overlay" style={{zIndex:60}} onClick={e=>{e.stopPropagation(); onClose();}}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h2 className="display" style={{fontSize:17}}>Elegir club</h2>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar o crear club..."
+          style={{width:'100%',marginBottom:10,padding:'12px 14px',background:'var(--surface2)',
+          border:'1px solid var(--line)',borderRadius:12,color:'var(--text)',outline:'none'}} />
+        <div className="club-list">
+          <button className={'club-item'+(!value?' on':'')} onClick={()=>onPick(null)}>
+            Sin club{!value && <span className="chk">✓</span>}</button>
+          {filtered.map(c => (
+            <button key={c.id} className={'club-item'+(value===c.id?' on':'')} onClick={()=>onPick(c.id)}>
+              {c.name}{value===c.id && <span className="chk">✓</span>}</button>
+          ))}
+          {query && !exact && (
+            <button className="club-item" style={{color:'var(--volt)'}}
+              onClick={()=>{ const id = onAddClub(q.trim()); onPick(id); }}>
+              ＋ Crear "{q.trim()}"</button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
 /* ============ EDITOR DE MARCADOR ============ */
-function ScoreEditor({ match, playersById, clubs, onSave, onDelete, onClose }) {
+function ScoreEditor({ match, playersById, clubs, onAddClub, onSave, onDelete, onClose }) {
   const [gA, setGA] = useState(match.golesA ?? 0);
   const [gB, setGB] = useState(match.golesB ?? 0);
   const [pA, setPA] = useState(match.penA ?? 0);
@@ -1101,7 +1228,7 @@ function ScoreEditor({ match, playersById, clubs, onSave, onDelete, onClose }) {
             <div className="sb-team">
               <div className="shield">{A?.emoji}</div>
               <div className="name">{A?.name}</div>
-              <ClubSelect value={cA} onChange={setCA} clubs={clubs} />
+              <ClubField value={cA} onChange={setCA} clubs={clubs} onAddClub={onAddClub} />
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gA}</div>
                 <div className="ctrl">
@@ -1114,7 +1241,7 @@ function ScoreEditor({ match, playersById, clubs, onSave, onDelete, onClose }) {
             <div className="sb-team">
               <div className="shield">{B?.emoji}</div>
               <div className="name">{B?.name}</div>
-              <ClubSelect value={cB} onChange={setCB} clubs={clubs} />
+              <ClubField value={cB} onChange={setCB} clubs={clubs} onAddClub={onAddClub} />
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gB}</div>
                 <div className="ctrl">
@@ -1166,7 +1293,7 @@ function ScoreEditor({ match, playersById, clubs, onSave, onDelete, onClose }) {
 }
 
 /* ============ REGISTRAR PARTIDO (liga libre) ============ */
-function AddMatchSheet({ t, playersById, clubs, onSave, onClose }) {
+function AddMatchSheet({ t, playersById, clubs, onAddClub, onSave, onClose }) {
   const [pA, setPA] = useState(null);
   const [pB, setPB] = useState(null);
   const [gA, setGA] = useState(0);
@@ -1213,7 +1340,7 @@ function AddMatchSheet({ t, playersById, clubs, onSave, onClose }) {
                 <div className="sb-team">
                   <div className="shield">{A?.emoji}</div>
                   <div className="name">{A?.name}</div>
-                  <ClubSelect value={cA} onChange={setCA} clubs={clubs} />
+                  <ClubField value={cA} onChange={setCA} clubs={clubs} onAddClub={onAddClub} />
                   <div className="stepper" style={{marginTop:10}}>
                     <div className="val">{gA}</div>
                     <div className="ctrl">
@@ -1226,7 +1353,7 @@ function AddMatchSheet({ t, playersById, clubs, onSave, onClose }) {
                 <div className="sb-team">
                   <div className="shield">{B?.emoji}</div>
                   <div className="name">{B?.name}</div>
-                  <ClubSelect value={cB} onChange={setCB} clubs={clubs} />
+                  <ClubField value={cB} onChange={setCB} clubs={clubs} onAddClub={onAddClub} />
                   <div className="stepper" style={{marginTop:10}}>
                     <div className="val">{gB}</div>
                     <div className="ctrl">
