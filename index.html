@@ -273,7 +273,44 @@ const loadDB = () => {
 };
 const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
 
+const CLUB_CATALOG = [{"name":"AFC Bournemouth","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/AFC%20Bournemouth.png"},{"name":"Arsenal FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Arsenal%20FC.png"},{"name":"Aston Villa","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Aston%20Villa.png"},{"name":"Brentford FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Brentford%20FC.png"},{"name":"Brighton & Hove Albion","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Brighton%20%26%20Hove%20Albion.png"},{"name":"Burnley FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Burnley%20FC.png"},{"name":"Chelsea FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Chelsea%20FC.png"},{"name":"Crystal Palace","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Crystal%20Palace.png"},{"name":"Everton FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Everton%20FC.png"},{"name":"Fulham FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Fulham%20FC.png"},{"name":"Leeds United","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Leeds%20United.png"},{"name":"Liverpool FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Liverpool%20FC.png"},{"name":"Manchester City","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Manchester%20City.png"},{"name":"Manchester United","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Manchester%20United.png"},{"name":"Newcastle United","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Newcastle%20United.png"},{"name":"Nottingham Forest","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Nottingham%20Forest.png"},{"name":"Sunderland AFC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Sunderland%20AFC.png"},{"name":"Tottenham Hotspur","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Tottenham%20Hotspur.png"},{"name":"West Ham United","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/West%20Ham%20United.png"},{"name":"Wolverhampton Wanderers","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/England%20-%20Premier%20League/Wolverhampton%20Wanderers.png"},{"name":"Athletic Bilbao","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Athletic%20Bilbao.png"},{"name":"Atlético de Madrid","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Atl%C3%A9tico%20de%20Madrid.png"},{"name":"CA Osasuna","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/CA%20Osasuna.png"},{"name":"Celta de Vigo","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Celta%20de%20Vigo.png"},{"name":"Deportivo Alavés","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Deportivo%20Alav%C3%A9s.png"},{"name":"Elche CF","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Elche%20CF.png"},{"name":"FC Barcelona","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/FC%20Barcelona.png"},{"name":"Getafe CF","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Getafe%20CF.png"},{"name":"Girona FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Girona%20FC.png"},{"name":"Levante UD","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Levante%20UD.png"},{"name":"RCD Espanyol Barcelona","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/RCD%20Espanyol%20Barcelona.png"},{"name":"RCD Mallorca","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/RCD%20Mallorca.png"},{"name":"Rayo Vallecano","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Rayo%20Vallecano.png"},{"name":"Real Betis Balompié","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Real%20Betis%20Balompi%C3%A9.png"},{"name":"Real Madrid","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Real%20Madrid.png"},{"name":"Real Oviedo","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Real%20Oviedo.png"},{"name":"Real Sociedad","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Real%20Sociedad.png"},{"name":"Sevilla FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Sevilla%20FC.png"},{"name":"Valencia CF","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Valencia%20CF.png"},{"name":"Villarreal CF","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Spain%20-%20LaLiga/Villarreal%20CF.png"},{"name":"AC Milan","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/AC%20Milan.png"},{"name":"ACF Fiorentina","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/ACF%20Fiorentina.png"},{"name":"AS Roma","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/AS%20Roma.png"},{"name":"Atalanta BC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Atalanta%20BC.png"},{"name":"Bologna FC 1909","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Bologna%20FC%201909.png"},{"name":"Cagliari Calcio","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Cagliari%20Calcio.png"},{"name":"Como 1907","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Como%201907.png"},{"name":"Genoa CFC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Genoa%20CFC.png"},{"name":"Hellas Verona","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Hellas%20Verona.png"},{"name":"Inter Milan","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Inter%20Milan.png"},{"name":"Juventus FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Juventus%20FC.png"},{"name":"Parma Calcio 1913","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Parma%20Calcio%201913.png"},{"name":"Pisa Sporting Club","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Pisa%20Sporting%20Club.png"},{"name":"SS Lazio","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/SS%20Lazio.png"},{"name":"SSC Napoli","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/SSC%20Napoli.png"},{"name":"Torino FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Torino%20FC.png"},{"name":"US Cremonese","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/US%20Cremonese.png"},{"name":"US Lecce","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/US%20Lecce.png"},{"name":"US Sassuolo","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/US%20Sassuolo.png"},{"name":"Udinese Calcio","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Italy%20-%20Serie%20A/Udinese%20Calcio.png"},{"name":"1.FC Heidenheim 1846","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/1.FC%20Heidenheim%201846.png"},{"name":"1.FC Köln","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/1.FC%20K%C3%B6ln.png"},{"name":"1.FC Union Berlin","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/1.FC%20Union%20Berlin.png"},{"name":"1.FSV Mainz 05","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/1.FSV%20Mainz%2005.png"},{"name":"Bayer 04 Leverkusen","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Bayer%2004%20Leverkusen.png"},{"name":"Bayern Munich","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Bayern%20Munich.png"},{"name":"Borussia Dortmund","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Borussia%20Dortmund.png"},{"name":"Borussia Mönchengladbach","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Borussia%20M%C3%B6nchengladbach.png"},{"name":"Eintracht Frankfurt","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Eintracht%20Frankfurt.png"},{"name":"FC Augsburg","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/FC%20Augsburg.png"},{"name":"FC St. Pauli","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/FC%20St.%20Pauli.png"},{"name":"Hamburger SV","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/Hamburger%20SV.png"},{"name":"RB Leipzig","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/RB%20Leipzig.png"},{"name":"SC Freiburg","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/SC%20Freiburg.png"},{"name":"SV Werder Bremen","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/SV%20Werder%20Bremen.png"},{"name":"TSG 1899 Hoffenheim","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/TSG%201899%20Hoffenheim.png"},{"name":"VfB Stuttgart","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/VfB%20Stuttgart.png"},{"name":"VfL Wolfsburg","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Germany%20-%20Bundesliga/VfL%20Wolfsburg.png"},{"name":"AJ Auxerre","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/AJ%20Auxerre.png"},{"name":"AS Monaco","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/AS%20Monaco.png"},{"name":"Angers SCO","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Angers%20SCO.png"},{"name":"FC Lorient","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/FC%20Lorient.png"},{"name":"FC Metz","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/FC%20Metz.png"},{"name":"FC Nantes","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/FC%20Nantes.png"},{"name":"FC Toulouse","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/FC%20Toulouse.png"},{"name":"LOSC Lille","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/LOSC%20Lille.png"},{"name":"Le Havre AC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Le%20Havre%20AC.png"},{"name":"OGC Nice","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/OGC%20Nice.png"},{"name":"Olympique Lyon","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Olympique%20Lyon.png"},{"name":"Olympique Marseille","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Olympique%20Marseille.png"},{"name":"Paris FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Paris%20FC.png"},{"name":"Paris Saint-Germain","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Paris%20Saint-Germain.png"},{"name":"RC Lens","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/RC%20Lens.png"},{"name":"RC Strasbourg Alsace","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/RC%20Strasbourg%20Alsace.png"},{"name":"Stade Brestois 29","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Stade%20Brestois%2029.png"},{"name":"Stade Rennais FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/France%20-%20Ligue%201/Stade%20Rennais%20FC.png"},{"name":"Avs Futebol","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Avs%20Futebol.png"},{"name":"CD Nacional","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/CD%20Nacional.png"},{"name":"CD Santa Clara","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/CD%20Santa%20Clara.png"},{"name":"CD Tondela","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/CD%20Tondela.png"},{"name":"CF Estrela Amadora","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/CF%20Estrela%20Amadora.png"},{"name":"Casa Pia AC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Casa%20Pia%20AC.png"},{"name":"FC Alverca","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/FC%20Alverca.png"},{"name":"FC Arouca","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/FC%20Arouca.png"},{"name":"FC Famalicão","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/FC%20Famalic%C3%A3o.png"},{"name":"FC Porto","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/FC%20Porto.png"},{"name":"GD Estoril Praia","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/GD%20Estoril%20Praia.png"},{"name":"Gil Vicente FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Gil%20Vicente%20FC.png"},{"name":"Moreirense FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Moreirense%20FC.png"},{"name":"Rio Ave FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Rio%20Ave%20FC.png"},{"name":"SC Braga","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/SC%20Braga.png"},{"name":"SL Benfica","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/SL%20Benfica.png"},{"name":"Sporting CP","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Sporting%20CP.png"},{"name":"Vitória Guimarães SC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Portugal%20-%20Liga%20Portugal/Vit%C3%B3ria%20Guimar%C3%A3es%20SC.png"},{"name":"AZ Alkmaar","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/AZ%20Alkmaar.png"},{"name":"Ajax Amsterdam","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Ajax%20Amsterdam.png"},{"name":"Excelsior Rotterdam","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Excelsior%20Rotterdam.png"},{"name":"FC Groningen","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/FC%20Groningen.png"},{"name":"FC Utrecht","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/FC%20Utrecht.png"},{"name":"FC Volendam","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/FC%20Volendam.png"},{"name":"Feyenoord Rotterdam","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Feyenoord%20Rotterdam.png"},{"name":"Fortuna Sittard","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Fortuna%20Sittard.png"},{"name":"Go Ahead Eagles","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Go%20Ahead%20Eagles.png"},{"name":"Heracles Almelo","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Heracles%20Almelo.png"},{"name":"NAC Breda","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/NAC%20Breda.png"},{"name":"NEC Nijmegen","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/NEC%20Nijmegen.png"},{"name":"PEC Zwolle","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/PEC%20Zwolle.png"},{"name":"PSV Eindhoven","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/PSV%20Eindhoven.png"},{"name":"SC Heerenveen","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/SC%20Heerenveen.png"},{"name":"SC Telstar","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/SC%20Telstar.png"},{"name":"Sparta Rotterdam","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Sparta%20Rotterdam.png"},{"name":"Twente Enschede FC","logo":"https://raw.githubusercontent.com/luukhopman/football-logos/master/logos/Netherlands%20-%20Eredivisie/Twente%20Enschede%20FC.png"},{"name":"Boca Juniors","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/bocajuniors.png"},{"name":"River Plate","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/riverplate.png"},{"name":"Racing Club","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/racing.png"},{"name":"Independiente","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/independiente.png"},{"name":"San Lorenzo","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/sanlorenzo.png"},{"name":"Estudiantes LP","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/estudiantes.png"},{"name":"Newell's Old Boys","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/newells.png"},{"name":"Rosario Central","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/rosario.png"},{"name":"Vélez Sarsfield","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/velez.gif"},{"name":"Gimnasia LP","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/gimnasia.png"},{"name":"Lanús","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/lanus.gif"},{"name":"Colón","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/colon.png"},{"name":"Belgrano","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/belgrano.png"},{"name":"Quilmes","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/ar-argentina/quilmes.png"},{"name":"U. de Chile","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/cl-chile/udechile.gif"},{"name":"U. Católica","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/cl-chile/cduc.png"},{"name":"Deportes Iquique","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/cl-chile/iquique.jpg"},{"name":"Nacional","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/uy-uruguay/nacional.gif"},{"name":"Peñarol","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/uy-uruguay/penarol.gif"},{"name":"Flamengo","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/flamengo.gif"},{"name":"Corinthians","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/corinthians.jpg"},{"name":"São Paulo","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/saopaulo.jpg"},{"name":"Palmeiras","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/palmeiras.gif"},{"name":"Grêmio","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/gremio.jpg"},{"name":"Cruzeiro","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/cruzeiro.gif"},{"name":"Botafogo","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/botafogo.gif"},{"name":"Fluminense","logo":"https://raw.githubusercontent.com/sportlogos/football.db.logos/master/south-america/br-brazil/fluminense.gif"},{"name":"Selección Chile","flag":"🇨🇱"},{"name":"Selección Argentina","flag":"🇦🇷"},{"name":"Selección Brasil","flag":"🇧🇷"},{"name":"Selección Uruguay","flag":"🇺🇾"},{"name":"Selección Colombia","flag":"🇨🇴"},{"name":"Selección Perú","flag":"🇵🇪"},{"name":"Selección Ecuador","flag":"🇪🇨"},{"name":"Selección Paraguay","flag":"🇵🇾"},{"name":"Selección Bolivia","flag":"🇧🇴"},{"name":"Selección Venezuela","flag":"🇻🇪"},{"name":"Selección México","flag":"🇲🇽"},{"name":"Selección Estados Unidos","flag":"🇺🇸"},{"name":"Selección Canadá","flag":"🇨🇦"},{"name":"Selección Costa Rica","flag":"🇨🇷"},{"name":"Selección Panamá","flag":"🇵🇦"},{"name":"Selección España","flag":"🇪🇸"},{"name":"Selección Francia","flag":"🇫🇷"},{"name":"Selección Inglaterra","flag":"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{"name":"Selección Alemania","flag":"🇩🇪"},{"name":"Selección Italia","flag":"🇮🇹"},{"name":"Selección Portugal","flag":"🇵🇹"},{"name":"Selección Países Bajos","flag":"🇳🇱"},{"name":"Selección Bélgica","flag":"🇧🇪"},{"name":"Selección Croacia","flag":"🇭🇷"},{"name":"Selección Suiza","flag":"🇨🇭"},{"name":"Selección Polonia","flag":"🇵🇱"},{"name":"Selección Dinamarca","flag":"🇩🇰"},{"name":"Selección Suecia","flag":"🇸🇪"},{"name":"Selección Noruega","flag":"🇳🇴"},{"name":"Selección Austria","flag":"🇦🇹"},{"name":"Selección Escocia","flag":"🏴󠁧󠁢󠁳󠁣󠁴󠁿"},{"name":"Selección Gales","flag":"🏴󠁧󠁢󠁷󠁬󠁳󠁿"},{"name":"Selección Turquía","flag":"🇹🇷"},{"name":"Selección Grecia","flag":"🇬🇷"},{"name":"Selección Serbia","flag":"🇷🇸"},{"name":"Selección Japón","flag":"🇯🇵"},{"name":"Selección Corea del Sur","flag":"🇰🇷"},{"name":"Selección Australia","flag":"🇦🇺"},{"name":"Selección Arabia Saudita","flag":"🇸🇦"},{"name":"Selección Catar","flag":"🇶🇦"},{"name":"Selección Marruecos","flag":"🇲🇦"},{"name":"Selección Senegal","flag":"🇸🇳"},{"name":"Selección Nigeria","flag":"🇳🇬"},{"name":"Selección Ghana","flag":"🇬🇭"},{"name":"Selección Egipto","flag":"🇪🇬"},{"name":"Selección Camerún","flag":"🇨🇲"},{"name":"Selección Costa de Marfil","flag":"🇨🇮"},{"name":"Selección Sudáfrica","flag":"🇿🇦"}];
+
 const SHIELDS = ['🎮','⚽','🦁','🐺','🦅','🐂','🐉','⚡','🔥','👑','🛡️','⭐','💀','🦈','🐆','🏴‍☠️','🚀','🎯','🥇','🌪️','🐍','🦂','🏹','⚔️'];
+
+/* ============ RÉCORDS ============ */
+function clubRecord(clubId, tournaments) {
+  const r = { pj:0, g:0, e:0, p:0, gf:0, gc:0 };
+  tournaments.forEach(t => t.matches.forEach(m => {
+    if (!m.played || m.bye) return;
+    if (m.clubA === clubId) {
+      r.pj++; r.gf += m.golesA; r.gc += m.golesB;
+      m.golesA > m.golesB ? r.g++ : m.golesA < m.golesB ? r.p++ : r.e++;
+    }
+    if (m.clubB === clubId) {
+      r.pj++; r.gf += m.golesB; r.gc += m.golesA;
+      m.golesB > m.golesA ? r.g++ : m.golesB < m.golesA ? r.p++ : r.e++;
+    }
+  }));
+  return r;
+}
+function playerRecord(playerId, tournaments) {
+  const r = { pj:0, g:0, e:0, p:0, gf:0, gc:0, titulos:0 };
+  tournaments.forEach(t => {
+    if (t.status === 'finalizado' && t.champion === playerId) r.titulos++;
+    t.matches.forEach(m => {
+      if (!m.played || m.bye) return;
+      if (m.teamA === playerId) {
+        r.pj++; r.gf += m.golesA; r.gc += m.golesB;
+        m.golesA > m.golesB ? r.g++ : m.golesA < m.golesB ? r.p++ : r.e++;
+      }
+      if (m.teamB === playerId) {
+        r.pj++; r.gf += m.golesB; r.gc += m.golesA;
+        m.golesB > m.golesA ? r.g++ : m.golesB < m.golesA ? r.p++ : r.e++;
+      }
+    });
+  });
+  return r;
+}
 
 /* ============ ENGINE (puro) ============ */
 const shuffle = (arr) => {
@@ -512,6 +549,8 @@ function App() {
     screen = <NewTournament db={db} update={update} />; tab = 'torneos';
   } else if (hash === '#/jugadores') {
     screen = <PlayersView db={db} update={update} />; tab = 'jugadores';
+  } else if (hash === '#/clubes') {
+    screen = <ClubsView db={db} update={update} />; tab = 'clubes';
   } else if (hash === '#/torneos') {
     screen = <TournamentsList db={db} playersById={playersById} />; tab = 'torneos';
   } else {
@@ -536,6 +575,8 @@ function App() {
           <span className="ico">🏆</span>Torneos</button>
         <button className={tab==='jugadores'?'active':''} onClick={()=>go('#/jugadores')}>
           <span className="ico">🎮</span>Jugadores</button>
+        <button className={tab==='clubes'?'active':''} onClick={()=>go('#/clubes')}>
+          <span className="ico">🛡️</span>Clubes</button>
       </nav>
     </React.Fragment>
   );
@@ -561,9 +602,12 @@ function clubHue(name) {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
   return h;
 }
-function ClubBadge({ name, logo, size = 16 }) {
+function ClubBadge({ name, logo, flag, size = 16 }) {
   const [failed, setFailed] = useState(false);
   if (!name) return null;
+  if (flag) {
+    return <span style={{fontSize: size, lineHeight: 1, marginRight: 4, verticalAlign: '-2px'}}>{flag}</span>;
+  }
   if (logo && !failed) {
     return <img className="clogo" src={logo} alt={name} loading="lazy"
       style={{ width: size + 4, height: size + 4 }} onError={()=>setFailed(true)} />;
@@ -703,7 +747,6 @@ function TournamentsList({ db, playersById }) {
 /* ============ JUGADORES & CLUBES ============ */
 function PlayersView({ db, update }) {
   const [editing, setEditing] = useState(null);
-  const [editingClub, setEditingClub] = useState(null);
   const [dialog, setDialog] = useState(null);
   const fileRef = useRef(null);
 
@@ -723,22 +766,7 @@ function PlayersView({ db, update }) {
       update(d => { d.players = d.players.filter(p => p.id !== id); return d; });
   };
 
-  const saveClub = (club) => {
-    update(d => {
-      if (club.id) { const i = d.clubs.findIndex(x => x.id === club.id); d.clubs[i] = club; }
-      else d.clubs.push({ ...club, id: uid() });
-      return d;
-    });
-    setEditingClub(null);
-  };
-  const deleteClub = (id) => {
-    const name = db.clubs.find(c => c.id === id)?.name;
-    setDialog({ message:`¿Eliminar el club ${name}? Los partidos ya jugados lo dejarán de mostrar.`,
-      danger:true, confirmLabel:'Eliminar', onConfirm: () => {
-        update(d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
-        setEditingClub(null);
-      }});
-  };
+
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(db, null, 2)], { type:'application/json' });
@@ -772,27 +800,23 @@ function PlayersView({ db, update }) {
       {db.players.length === 0 && (
         <div className="empty"><div className="big">🎮</div><p>Sin jugadores todavía.<br/>Agrega al menos 2 amigos para armar un torneo.</p></div>
       )}
-      {db.players.map(p => (
-        <div className="card" key={p.id}>
-          <div className="row">
-            <div style={{fontSize:30}}>{p.emoji}</div>
-            <div className="grow" style={{fontWeight:700}}>{p.name}</div>
-            <button className="btn ghost sm" onClick={()=>setEditing(p)}>Editar</button>
-            <button className="btn danger sm" onClick={()=>removePlayer(p.id)}>✕</button>
+      {db.players.map(p => {
+        const r = playerRecord(p.id, db.tournaments);
+        return (
+          <div className="card" key={p.id}>
+            <div className="row">
+              <div style={{fontSize:30}}>{p.emoji}</div>
+              <div className="grow">
+                <div style={{fontWeight:700}}>{p.name}{r.titulos > 0 && <span style={{marginLeft:6}}>{'🏆'.repeat(Math.min(r.titulos,5))}</span>}</div>
+                <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
+                  {r.pj > 0 ? `${r.pj} PJ · ${r.g}G ${r.e}E ${r.p}P · ${r.gf}:${r.gc}` : 'Sin partidos aún'}</div>
+              </div>
+              <button className="btn ghost sm" onClick={()=>setEditing(p)}>Editar</button>
+              <button className="btn danger sm" onClick={()=>removePlayer(p.id)}>✕</button>
+            </div>
           </div>
-        </div>
-      ))}
-
-      <div className="section-title">Clubes ({db.clubs.length})</div>
-      <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
-        El club se elige en cada partido. Toca un club para editarlo o ponerle escudo.</p>
-      <button className="btn ghost" style={{marginBottom:10}} onClick={()=>setEditingClub({ name:'', logo:'' })}>+ Nuevo club</button>
-      <div className="chips">
-        {db.clubs.map(c => (
-          <button key={c.id} className="chip" onClick={()=>setEditingClub(c)}>
-            <ClubBadge name={c.name} logo={c.logo} size={16} /> {c.name}</button>
-        ))}
-      </div>
+        );
+      })}
 
       <div className="section-title">Respaldo</div>
       <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
@@ -804,7 +828,6 @@ function PlayersView({ db, update }) {
       </div>
 
       {editing && <PlayerEditor player={editing} onSave={savePlayer} onClose={()=>setEditing(null)} />}
-      {editingClub && <ClubEditor club={editingClub} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditingClub(null)} />}
       <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
@@ -834,6 +857,65 @@ function PlayerEditor({ player, onSave, onClose }) {
           onClick={()=>onSave({ ...player, name: name.trim(), emoji })}>Guardar jugador</button>
       </div>
     </div>
+  );
+}
+
+/* ============ CLUBES (vista con estadísticas) ============ */
+function ClubsView({ db, update }) {
+  const [editingClub, setEditingClub] = useState(null);
+  const [dialog, setDialog] = useState(null);
+
+  const saveClub = (club) => {
+    update(d => {
+      if (club.id) { const i = d.clubs.findIndex(x => x.id === club.id); d.clubs[i] = club; }
+      else d.clubs.push({ ...club, id: uid() });
+      return d;
+    });
+    setEditingClub(null);
+  };
+  const deleteClub = (id) => {
+    const name = db.clubs.find(c => c.id === id)?.name;
+    setDialog({ message:`¿Eliminar el club ${name}? Los partidos ya jugados lo dejarán de mostrar.`,
+      danger:true, confirmLabel:'Eliminar', onConfirm: () => {
+        update(d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
+        setEditingClub(null);
+      }});
+  };
+
+  const withStats = db.clubs.map(c => ({ ...c, r: clubRecord(c.id, db.tournaments) }))
+    .sort((a, b) => b.r.pj - a.r.pj || a.name.localeCompare(b.name));
+  const used = withStats.filter(c => c.r.pj > 0);
+  const unused = withStats.filter(c => c.r.pj === 0);
+
+  const ClubCard = ({ c }) => (
+    <div className="card tap" onClick={()=>setEditingClub(c)}>
+      <div className="row">
+        <ClubBadge name={c.name} logo={c.logo} flag={c.flag} size={30} />
+        <div className="grow">
+          <div style={{fontWeight:700}}>{c.name}</div>
+          <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
+            {c.r.pj > 0 ? `${c.r.pj} PJ · ${c.r.g}G ${c.r.e}E ${c.r.p}P · goles ${c.r.gf}:${c.r.gc}` : 'Sin partidos aún'}</div>
+        </div>
+        {c.r.pj > 0 && <div style={{textAlign:'right'}}>
+          <div className="display" style={{fontSize:18,color:'var(--volt)'}}>{Math.round(c.r.g / c.r.pj * 100)}%</div>
+          <div style={{fontSize:9,color:'var(--muted)',letterSpacing:'.1em'}}>VICTORIAS</div>
+        </div>}
+      </div>
+    </div>
+  );
+
+  return (
+    <React.Fragment>
+      <button className="btn primary" onClick={()=>setEditingClub({ name:'', logo:'' })}>+ Nuevo club</button>
+      <p style={{fontSize:12,color:'var(--muted)',margin:'10px 0'}}>
+        Toca un club para editar su nombre o escudo. También puedes buscar entre {CLUB_CATALOG.length} clubes y selecciones directamente al registrar un partido.</p>
+      {used.length > 0 && <div className="section-title">Con historial ({used.length})</div>}
+      {used.map(c => <ClubCard key={c.id} c={c} />)}
+      {unused.length > 0 && <div className="section-title">Sin estrenar ({unused.length})</div>}
+      {unused.map(c => <ClubCard key={c.id} c={c} />)}
+      {editingClub && <ClubEditor club={editingClub} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditingClub(null)} />}
+      <Dialog d={dialog} onClose={()=>setDialog(null)} />
+    </React.Fragment>
   );
 }
 
@@ -981,11 +1063,11 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
   const [adding, setAdding] = useState(false);
   const [dialog, setDialog] = useState(null);
 
-  const addClub = (name) => {
-    const existing = db.clubs.find(c => c.name.toLowerCase() === name.toLowerCase());
+  const addClub = (club) => {
+    const existing = db.clubs.find(c => c.name.toLowerCase() === club.name.toLowerCase());
     if (existing) return existing.id;
     const id = uid();
-    update(d => { d.clubs.push({ id, name }); return d; });
+    update(d => { d.clubs.push({ id, name: club.name, logo: club.logo || null, flag: club.flag || null }); return d; });
     return id;
   };
 
@@ -1271,29 +1353,41 @@ function ClubField({ value, onChange, clubs, onAddClub }) {
 function ClubSheet({ clubs, value, onPick, onAddClub, onClose }) {
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
-  const filtered = query ? clubs.filter(c=>c.name.toLowerCase().includes(query)) : clubs;
-  const exact = clubs.some(c=>c.name.toLowerCase()===query);
+  const mine = query ? clubs.filter(c=>c.name.toLowerCase().includes(query)) : clubs;
+  const myNames = new Set(clubs.map(c => c.name.toLowerCase()));
+  const fromCatalog = query
+    ? CLUB_CATALOG.filter(c => c.name.toLowerCase().includes(query) && !myNames.has(c.name.toLowerCase())).slice(0, 15)
+    : [];
+  const exact = myNames.has(query) || CLUB_CATALOG.some(c => c.name.toLowerCase() === query);
   return (
     <div className="overlay" style={{zIndex:60}} onClick={e=>{e.stopPropagation(); onClose();}}>
       <div className="sheet" onClick={e=>e.stopPropagation()}>
         <div className="sheet-grab" />
         <h2 className="display" style={{fontSize:17}}>Elegir club</h2>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar o crear club..."
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar club o selección..."
           style={{width:'100%',marginBottom:10,padding:'12px 14px',background:'var(--surface2)',
           border:'1px solid var(--line)',borderRadius:12,color:'var(--text)',outline:'none'}} />
         <div className="club-list">
           <button className={'club-item'+(!value?' on':'')} onClick={()=>onPick(null)}>
             Sin club{!value && <span className="chk">✓</span>}</button>
-          {filtered.map(c => (
+          {mine.map(c => (
             <button key={c.id} className={'club-item'+(value===c.id?' on':'')} onClick={()=>onPick(c.id)}>
-              <ClubBadge name={c.name} logo={c.logo} size={22} /> {c.name}{value===c.id && <span className="chk">✓</span>}</button>
+              <ClubBadge name={c.name} logo={c.logo} flag={c.flag} size={22} /> {c.name}{value===c.id && <span className="chk">✓</span>}</button>
+          ))}
+          {fromCatalog.length > 0 && <div className="mrow-tag" style={{padding:'6px 10px 2px'}}>Del catálogo ({CLUB_CATALOG.length} disponibles)</div>}
+          {fromCatalog.map((c, i) => (
+            <button key={'cat'+i} className="club-item" onClick={()=>{ const id = onAddClub(c); onPick(id); }}>
+              <ClubBadge name={c.name} logo={c.logo} flag={c.flag} size={22} /> {c.name}
+              <span className="chk" style={{color:'var(--muted)',fontSize:11}}>agregar</span></button>
           ))}
           {query && !exact && (
             <button className="club-item" style={{color:'var(--volt)'}}
-              onClick={()=>{ const id = onAddClub(q.trim()); onPick(id); }}>
+              onClick={()=>{ const id = onAddClub({ name: q.trim() }); onPick(id); }}>
               ＋ Crear "{q.trim()}"</button>
           )}
         </div>
+        {!query && <p style={{fontSize:11,color:'var(--muted)',textAlign:'center'}}>
+          Escribe para buscar entre {CLUB_CATALOG.length} clubes y selecciones con escudo.</p>}
       </div>
     </div>
   );
