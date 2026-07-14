@@ -234,6 +234,20 @@ input,select{font-family:inherit;font-size:16px}
 .big-stat{flex:1;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 4px}
 .big-stat .n{font-family:'Anton';font-size:22px;color:var(--volt)}
 .big-stat .l{font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.ach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ach{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px;
+  text-align:center}
+.ach .ic{font-size:22px}
+.ach .nm{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.2}
+.streak-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;
+  background:rgba(200,241,53,.12);border:1px solid var(--volt-dim);color:var(--volt);
+  font-size:12px;font-weight:700}
+.undo-toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);width:calc(100% - 32px);
+  max-width:488px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:slideUp .2s ease}
+.undo-toast span{font-size:13px;color:var(--text)}
+.undo-toast button{color:var(--volt);font-weight:700;font-size:13px;white-space:nowrap}
 
 /* Ficha de club */
 .back-btn{color:var(--volt);font-size:13px;font-weight:700;margin-bottom:10px;display:inline-block}
@@ -381,6 +395,54 @@ function recordWhere(tournaments, fn) {
     my > their ? r.g++ : my < their ? r.p++ : r.e++;
   }));
   return r;
+}
+
+function topScorers(players, tournaments, limit = 5) {
+  return players.map(p => ({ p, r: playerRecord(p.id, tournaments) }))
+    .filter(x => x.r.pj > 0)
+    .sort((a, b) => b.r.gf - a.r.gf || b.r.pj - a.r.pj)
+    .slice(0, limit);
+}
+function currentStreak(playerId, tournaments) {
+  const ms = matchesOfPlayer(playerId, tournaments); // ya viene ordenado, más reciente primero
+  let streak = 0, type = null;
+  for (const m of ms) {
+    const my = m.teamA === playerId ? m.golesA : m.golesB;
+    const their = m.teamA === playerId ? m.golesB : m.golesA;
+    const res = my > their ? 'g' : my < their ? 'p' : 'e';
+    if (type === null) { type = res; streak = 1; }
+    else if (res === type) streak++;
+    else break;
+  }
+  return { type, streak };
+}
+function hottestStreak(players, tournaments) {
+  const streaks = players.map(p => ({ p, s: currentStreak(p.id, tournaments) }))
+    .filter(x => x.s.type === 'g' && x.s.streak >= 2)
+    .sort((a, b) => b.s.streak - a.s.streak);
+  return streaks[0] || null;
+}
+const ACHIEVEMENTS = [
+  { id:'first_win', icon:'🥇', name:'Primera victoria', check: r => r.g >= 1 },
+  { id:'ten_games', icon:'💯', name:'Curtido', desc:'10 partidos jugados', check: r => r.pj >= 10 },
+  { id:'scorer', icon:'⚡', name:'Goleador', desc:'10 goles en total', check: r => r.gf >= 10 },
+  { id:'champion', icon:'🏆', name:'Campeón', desc:'Ganó un torneo', check: r => r.titulos >= 1 },
+  { id:'multichamp', icon:'👑', name:'Multicampeón', desc:'2+ títulos', check: r => r.titulos >= 2 },
+  { id:'streak3', icon:'🔥', name:'En racha', desc:'3 victorias seguidas', check: (r,x) => x.streak.type==='g' && x.streak.streak >= 3 },
+  { id:'streak5', icon:'🔥🔥', name:'Imparable', desc:'5 victorias seguidas', check: (r,x) => x.streak.type==='g' && x.streak.streak >= 5 },
+  { id:'rout', icon:'🎯', name:'Goleada', desc:'Ganó por 5+ de diferencia', check: (r,x) => x.maxMargin >= 5 },
+];
+function playerAchievements(playerId, tournaments) {
+  const r = playerRecord(playerId, tournaments);
+  const streak = currentStreak(playerId, tournaments);
+  const ms = matchesOfPlayer(playerId, tournaments);
+  let maxMargin = 0;
+  ms.forEach(m => {
+    const my = m.teamA === playerId ? m.golesA : m.golesB;
+    const their = m.teamA === playerId ? m.golesB : m.golesA;
+    if (my > their) maxMargin = Math.max(maxMargin, my - their);
+  });
+  return ACHIEVEMENTS.filter(a => a.check(r, { streak, maxMargin }));
 }
 
 /* ============ ENGINE (puro) ============ */
@@ -553,6 +615,27 @@ function qualifiersOrdered(groups, matches, advancePerGroup, teamsById) {
   return ordered.filter(Boolean);
 }
 
+// Construye un torneo nuevo (fixture/llaves/grupos) a partir de config. Pura: no toca localStorage.
+function buildTournament({ name, format, teamIds, idaVuelta = false, numGroups = 2, fixtureMode = 'sorteo' }) {
+  const manual = format === 'liga' && fixtureMode === 'manual';
+  const t = {
+    id: uid(), name, format, teamIds: [...teamIds],
+    status: 'activo', champion: null, createdAt: Date.now(),
+    config: { idaVuelta, numGroups, advancePerGroup: 2, fixtureMode: manual ? 'manual' : 'sorteo' },
+    groups: null, matches: [], koStarted: false
+  };
+  if (format === 'liga' && !manual) {
+    t.matches = roundRobin(teamIds, { idaVuelta });
+  } else if (format === 'eliminatoria') {
+    t.matches = buildBracket(teamIds);
+    t.koStarted = true;
+  } else if (format === 'grupos') {
+    const { groups, matches } = buildGroups(teamIds, numGroups);
+    t.groups = groups; t.matches = matches;
+  }
+  return t;
+}
+
 
 /* ============ APP ============ */
 const { useState, useEffect, useMemo, useRef } = React;
@@ -606,6 +689,24 @@ function App() {
     saveDB(next);
     return next;
   });
+  const [undo, setUndo] = useState(null); // { label, snapshot }
+  const undoTimer = useRef(null);
+  const dbRef = useRef(db);
+  dbRef.current = db;
+  const notifyDelete = (label, fn) => {
+    const snapshot = dbRef.current;
+    update(fn);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo({ label, snapshot });
+    undoTimer.current = setTimeout(() => setUndo(null), 6000);
+  };
+  const performUndo = () => {
+    if (!undo) return;
+    clearTimeout(undoTimer.current);
+    saveDB(undo.snapshot);
+    setDb(undo.snapshot);
+    setUndo(null);
+  };
   const playersById = useMemo(() => Object.fromEntries(db.players.map(p => [p.id, p])), [db.players]);
   const clubsById = useMemo(() => Object.fromEntries(db.clubs.map(c => [c.id, c])), [db.clubs]);
 
@@ -613,22 +714,22 @@ function App() {
   if (hash.startsWith('#/torneo/')) {
     const id = hash.split('/')[2];
     const t = db.tournaments.find(x => x.id === id);
-    screen = t ? <TournamentView key={id} t={t} db={db} update={update} playersById={playersById} clubsById={clubsById} />
+    screen = t ? <TournamentView key={id} t={t} db={db} update={update} notifyDelete={notifyDelete} playersById={playersById} clubsById={clubsById} />
                : <div className="empty"><div className="big">🤷</div>Torneo no encontrado</div>;
     tab = 'torneos';
   } else if (hash === '#/nuevo') {
     screen = <NewTournament db={db} update={update} />; tab = 'torneos';
   } else if (hash === '#/jugadores') {
-    screen = <PlayersView db={db} update={update} />; tab = 'jugadores';
+    screen = <PlayersView db={db} update={update} notifyDelete={notifyDelete} />; tab = 'jugadores';
   } else if (hash === '#/clubes') {
-    screen = <ClubsView db={db} update={update} />; tab = 'clubes';
+    screen = <ClubsView db={db} update={update} notifyDelete={notifyDelete} />; tab = 'clubes';
   } else if (hash.startsWith('#/jugador/')) {
     const id = hash.split('/')[2];
     screen = <PlayerDetail key={id} id={id} db={db} update={update} playersById={playersById} clubsById={clubsById} />;
     tab = 'jugadores';
   } else if (hash.startsWith('#/club/')) {
     const id = hash.split('/')[2];
-    screen = <ClubDetail key={id} id={id} db={db} update={update} playersById={playersById} clubsById={clubsById} />;
+    screen = <ClubDetail key={id} id={id} db={db} update={update} notifyDelete={notifyDelete} playersById={playersById} clubsById={clubsById} />;
     tab = 'clubes';
   } else if (hash === '#/torneos') {
     screen = <TournamentsList db={db} playersById={playersById} />; tab = 'torneos';
@@ -647,6 +748,12 @@ function App() {
       </div>
       <div className="screen">{screen}</div>
       <DialogHost />
+      {undo && (
+        <div className="undo-toast">
+          <span>{undo.label}</span>
+          <button onClick={performUndo}>Deshacer</button>
+        </div>
+      )}
       <nav className="nav">
         <button className={tab==='inicio'?'active':''} onClick={()=>go('#/')}>
           <span className="ico">🏟️</span>Inicio</button>
@@ -699,6 +806,137 @@ function ClubBadge({ name, logo, flag, size = 16 }) {
     <span className="cbadge" style={{ width: size, height: size, fontSize: Math.round(size * 0.42),
       background: `hsl(${hue} 55% 26%)`, borderColor: `hsl(${hue} 75% 48%)` }}>{initials}</span>
   );
+}
+
+/* ============ COMPARTIR COMO IMAGEN ============ */
+function loadImg(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+function drawBadge(ctx, x, y, r, name, logoImg, flag) {
+  if (flag) {
+    ctx.font = `${Math.round(r*1.6)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(flag, x, y);
+    return;
+  }
+  if (logoImg) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.clip();
+    const s = r*2;
+    ctx.drawImage(logoImg, x-s/2, y-s/2, s, s);
+    ctx.restore();
+    return;
+  }
+  const hue = clubHue(name || '?');
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = `hsl(${hue} 55% 26%)`; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = `hsl(${hue} 75% 48%)`; ctx.stroke();
+  const words = (name||'?').replace(/[^A-Za-zÀ-ÿ0-9 ]/g,'').split(/\s+/).filter(Boolean);
+  const initials = (words.length===1 ? words[0].slice(0,3) : words.map(w=>w[0]).join('').slice(0,3)).toUpperCase();
+  ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.round(r*0.85)}px Archivo, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(initials, x, y+1);
+}
+async function shareCanvas(canvas, filename, title) {
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  if (!blob) return;
+  const file = new File([blob], filename, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title }); return; } catch (e) { /* usuario canceló */ if (e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+async function shareMatchImage(m, playersById, clubsById) {
+  const W = 1080, H = 1350;
+  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0E1A13'); g.addColorStop(1,'#0B140E');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = '#C8F135'; ctx.font = '800 44px Archivo, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('⚽ FIFA TORNEOS', W/2, 110);
+  ctx.fillStyle = '#8CA695'; ctx.font = '28px Archivo, sans-serif';
+  ctx.fillText(new Date(m.playedAt || Date.now()).toLocaleDateString('es-CL', {day:'numeric',month:'long',year:'numeric'}), W/2, 155);
+
+  const A = playersById[m.teamA], B = playersById[m.teamB];
+  const cA = clubsById[m.clubA], cB = clubsById[m.clubB];
+  const [imgA, imgB] = await Promise.all([loadImg(cA?.logo), loadImg(cB?.logo)]);
+
+  drawBadge(ctx, W*0.28, 420, 110, cA?.name, imgA, cA?.flag);
+  drawBadge(ctx, W*0.72, 420, 110, cB?.name, imgB, cB?.flag);
+
+  ctx.fillStyle = '#EEF6EA'; ctx.font = '700 40px Archivo, sans-serif';
+  ctx.fillText(A?.name || '', W*0.28, 590);
+  ctx.fillText(B?.name || '', W*0.72, 590);
+  if (cA?.name) { ctx.fillStyle = '#8CA695'; ctx.font = '26px Archivo, sans-serif'; ctx.fillText(cA.name, W*0.28, 630); }
+  if (cB?.name) { ctx.fillStyle = '#8CA695'; ctx.font = '26px Archivo, sans-serif'; ctx.fillText(cB.name, W*0.72, 630); }
+
+  ctx.fillStyle = '#C8F135'; ctx.font = '800 160px Anton, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(m.golesA), W*0.28, 800);
+  ctx.fillText(String(m.golesB), W*0.72, 800);
+  ctx.fillStyle = '#8CA695'; ctx.font = '700 50px Anton, sans-serif';
+  ctx.fillText('VS', W/2, 800);
+  ctx.textBaseline = 'alphabetic';
+
+  if (m.penA != null) {
+    ctx.fillStyle = '#F5C542'; ctx.font = '600 30px Archivo, sans-serif';
+    ctx.fillText(`Penales ${m.penA} - ${m.penB}`, W/2, 900);
+  }
+  ctx.fillStyle = '#24382C'; ctx.font = '24px Archivo, sans-serif';
+  ctx.fillText('angulodev.github.io/FIFA-tracker', W/2, H-50);
+
+  await shareCanvas(canvas, 'partido-fifa.png', `${A?.name} ${m.golesA}-${m.golesB} ${B?.name}`);
+}
+async function shareStandingsImage(title, standings, playersById) {
+  const W = 1080, rowH = 100, H = 340 + standings.length*rowH + 100;
+  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0E1A13'); g.addColorStop(1,'#0B140E');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = '#C8F135'; ctx.font = '800 40px Archivo, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('⚽ FIFA TORNEOS', W/2, 100);
+  ctx.fillStyle = '#EEF6EA'; ctx.font = '800 52px Archivo, sans-serif';
+  ctx.fillText(title, W/2, 170);
+  ctx.fillStyle = '#8CA695'; ctx.font = '24px Archivo, sans-serif';
+  ctx.fillText('TABLA DE POSICIONES', W/2, 210);
+
+  let y = 300;
+  ctx.textAlign = 'left'; ctx.font = '700 22px Archivo, sans-serif'; ctx.fillStyle = '#8CA695';
+  ctx.fillText('#  JUGADOR', 60, y);
+  ctx.textAlign = 'center';
+  ['PJ','G','E','P','DG','PTS'].forEach((h,i) => ctx.fillText(h, 640 + i*75, y));
+  y += 30;
+  ctx.strokeStyle = '#24382C'; ctx.beginPath(); ctx.moveTo(60,y); ctx.lineTo(W-60,y); ctx.stroke();
+
+  for (const [i, s] of standings.entries()) {
+    y += rowH;
+    const p = playersById[s.id];
+    if (i < 2) { ctx.fillStyle = 'rgba(200,241,53,.06)'; ctx.fillRect(50, y-rowH+35, W-100, rowH-10); }
+    ctx.textAlign = 'left'; ctx.fillStyle = i===0 ? '#C8F135' : '#EEF6EA'; ctx.font = '700 34px Archivo, sans-serif';
+    ctx.fillText(`${i+1}  ${p?.emoji||''} ${p?.name||''}`, 60, y);
+    ctx.textAlign = 'center'; ctx.font = '30px Archivo, sans-serif'; ctx.fillStyle = '#EEF6EA';
+    [s.pj, s.g, s.e, s.p].forEach((v,j) => ctx.fillText(String(v), 640+j*75, y));
+    const dg = s.gf-s.gc;
+    ctx.fillText((dg>0?'+':'')+dg, 640+4*75, y);
+    ctx.fillStyle = '#C8F135'; ctx.font = '800 34px Archivo, sans-serif';
+    ctx.fillText(String(s.pts), 640+5*75, y);
+    if (i < standings.length-1) {
+      ctx.strokeStyle = '#1A2C22'; ctx.beginPath(); ctx.moveTo(60,y+30); ctx.lineTo(W-60,y+30); ctx.stroke();
+    }
+  }
+  ctx.textAlign = 'center'; ctx.fillStyle = '#24382C'; ctx.font = '22px Archivo, sans-serif';
+  ctx.fillText('angulodev.github.io/FIFA-tracker', W/2, H-40);
+
+  await shareCanvas(canvas, 'tabla-fifa.png', title);
 }
 
 /* ============ GRÁFICOS ============ */
@@ -794,6 +1032,30 @@ function Dashboard({ db, playersById, clubsById }) {
           <div style={{fontSize:12,color:'var(--muted)'}}>{topChamp[1]} título{topChamp[1]>1?'s':''}</div>
         </div>
       )}
+
+      {(() => {
+        const scorers = topScorers(db.players, db.tournaments, 3);
+        const hot = hottestStreak(db.players, db.tournaments);
+        if (scorers.length === 0 && !hot) return null;
+        return (
+          <div className="row" style={{gap:10,marginBottom:12,alignItems:'stretch'}}>
+            {scorers.length > 0 && (
+              <div className="card tap grow" style={{marginBottom:0}} onClick={()=>go('#/jugador/'+scorers[0].p.id)}>
+                <div className="eyebrow">⚡ Goleador</div>
+                <div style={{fontWeight:700,fontSize:15}}>{scorers[0].p.emoji} {scorers[0].p.name}</div>
+                <div className="display" style={{fontSize:22,color:'var(--volt)'}}>{scorers[0].r.gf} goles</div>
+              </div>
+            )}
+            {hot && (
+              <div className="card tap grow" style={{marginBottom:0}} onClick={()=>go('#/jugador/'+hot.p.id)}>
+                <div className="eyebrow">🔥 Racha caliente</div>
+                <div style={{fontWeight:700,fontSize:15}}>{hot.p.emoji} {hot.p.name}</div>
+                <div className="display" style={{fontSize:22,color:'var(--volt)'}}>{hot.s.streak} seguidas</div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {active.length > 0 && <div className="section-title">En juego</div>}
       {active.map(t => <TournamentCard key={t.id} t={t} playersById={playersById} />)}
@@ -906,12 +1168,36 @@ function PlayerDetail({ id, db, update, playersById, clubsById }) {
         <div className="empty"><div className="big">📊</div><p>Sin partidos todavía.<br/>Las estadísticas aparecerán cuando juegue.</p></div>
       ) : (
         <React.Fragment>
+          {(() => {
+            const s = currentStreak(id, db.tournaments);
+            if (s.streak < 2) return null;
+            const label = s.type==='g' ? `🔥 ${s.streak} victorias seguidas` : s.type==='p' ? `${s.streak} derrotas seguidas` : `${s.streak} empates seguidos`;
+            return <div className="streak-pill" style={{marginBottom:12}}>{label}</div>;
+          })()}
           <div className="big-stat-row">
             <div className="big-stat"><div className="n">{r.pj}</div><div className="l">Jugados</div></div>
             <div className="big-stat"><div className="n">{Math.round(r.g/r.pj*100)}%</div><div className="l">Victorias</div></div>
             <div className="big-stat"><div className="n">{r.gf}</div><div className="l">Goles</div></div>
             <div className="big-stat"><div className="n">{r.gf-r.gc>0?'+':''}{r.gf-r.gc}</div><div className="l">Dif. gol</div></div>
           </div>
+
+          {(() => {
+            const ach = playerAchievements(id, db.tournaments);
+            if (ach.length === 0) return null;
+            return (
+              <div className="card">
+                <div className="eyebrow">Logros ({ach.length})</div>
+                <div className="ach-grid">
+                  {ach.map(a => (
+                    <div className="ach" key={a.id} title={a.desc || a.name}>
+                      <div className="ic">{a.icon}</div>
+                      <div className="nm">{a.name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="card">
             <div className="eyebrow">Resultados</div>
@@ -975,7 +1261,7 @@ function PlayerDetail({ id, db, update, playersById, clubsById }) {
 }
 
 /* ============ JUGADORES & CLUBES ============ */
-function PlayersView({ db, update }) {
+function PlayersView({ db, update, notifyDelete }) {
   const [editing, setEditing] = useState(null);
   const [dialog, setDialog] = useState(null);
   const fileRef = useRef(null);
@@ -992,8 +1278,9 @@ function PlayersView({ db, update }) {
   };
   const removePlayer = async (id) => {
     if (usedIn(id)) { uiAlert('Este jugador participa en torneos. No se puede eliminar.'); return; }
+    const name = db.players.find(p => p.id === id)?.name;
     if (await uiConfirm('¿Eliminar jugador?', { destructive:true, okLabel:'Eliminar' }))
-      update(d => { d.players = d.players.filter(p => p.id !== id); return d; });
+      notifyDelete(`${name} eliminado`, d => { d.players = d.players.filter(p => p.id !== id); return d; });
   };
 
 
@@ -1091,7 +1378,7 @@ function PlayerEditor({ player, onSave, onClose }) {
 }
 
 /* ============ FICHA DE CLUB ============ */
-function ClubDetail({ id, db, update, playersById, clubsById }) {
+function ClubDetail({ id, db, update, notifyDelete, playersById, clubsById }) {
   const [editing, setEditing] = useState(false);
   const [dialog, setDialog] = useState(null);
   const c = clubsById[id];
@@ -1115,7 +1402,7 @@ function ClubDetail({ id, db, update, playersById, clubsById }) {
   const deleteClub = (cid) => {
     setDialog({ message:`¿Eliminar el club ${c.name}? Los partidos ya jugados lo dejarán de mostrar.`,
       danger:true, confirmLabel:'Eliminar', onConfirm: () => {
-        update(d => { d.clubs = d.clubs.filter(x => x.id !== cid); return d; });
+        notifyDelete(`${c.name} eliminado`, d => { d.clubs = d.clubs.filter(x => x.id !== cid); return d; });
         go('#/clubes');
       }});
   };
@@ -1185,7 +1472,7 @@ function ClubDetail({ id, db, update, playersById, clubsById }) {
 }
 
 /* ============ CLUBES (vista con estadísticas) ============ */
-function ClubsView({ db, update }) {
+function ClubsView({ db, update, notifyDelete }) {
   const [editingClub, setEditingClub] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [catQ, setCatQ] = useState('');
@@ -1206,7 +1493,7 @@ function ClubsView({ db, update }) {
     const name = db.clubs.find(c => c.id === id)?.name;
     setDialog({ message:`¿Eliminar el club ${name}? Los partidos ya jugados lo dejarán de mostrar.`,
       danger:true, confirmLabel:'Eliminar', onConfirm: () => {
-        update(d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
+        notifyDelete(`${name} eliminado`, d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
         setEditingClub(null);
       }});
   };
@@ -1317,21 +1604,7 @@ function NewTournament({ db, update }) {
 
   const create = () => {
     const manual = format === 'liga' && fixtureMode === 'manual';
-    const t = {
-      id: uid(), name: name.trim(), format, teamIds: [...selected],
-      status: 'activo', champion: null, createdAt: Date.now(),
-      config: { idaVuelta, numGroups, advancePerGroup: 2, fixtureMode: manual ? 'manual' : 'sorteo' },
-      groups: null, matches: [], koStarted: false
-    };
-    if (format === 'liga' && !manual) {
-      t.matches = roundRobin(selected, { idaVuelta });
-    } else if (format === 'eliminatoria') {
-      t.matches = buildBracket(selected);
-      t.koStarted = true;
-    } else if (format === 'grupos') {
-      const { groups, matches } = buildGroups(selected, numGroups);
-      t.groups = groups; t.matches = matches;
-    }
+    const t = buildTournament({ name: name.trim(), format, teamIds: selected, idaVuelta, numGroups, fixtureMode });
     update(d => { d.tournaments.push(t); return d; });
     go('#/torneo/' + t.id);
   };
@@ -1406,7 +1679,7 @@ function NewTournament({ db, update }) {
 }
 
 /* ============ VISTA DE TORNEO ============ */
-function TournamentView({ t, db, update, playersById, clubsById }) {
+function TournamentView({ t, db, update, notifyDelete, playersById, clubsById }) {
   const isKO = t.format === 'eliminatoria';
   const isGroups = t.format === 'grupos';
   const manual = t.config.fixtureMode === 'manual';
@@ -1460,7 +1733,7 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
 
   const deleteMatch = async (matchId) => {
     if (!await uiConfirm('¿Eliminar este partido?', { destructive:true, okLabel:'Eliminar' })) return;
-    update(d => {
+    notifyDelete('Partido eliminado', d => {
       const tt = d.tournaments.find(x => x.id === t.id);
       tt.matches = tt.matches.filter(m => m.id !== matchId);
       return d;
@@ -1491,10 +1764,19 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
   };
 
   const removeTournament = async () => {
-    if (await uiConfirm('¿Eliminar este torneo y todos sus partidos? No se puede deshacer.', { destructive:true, okLabel:'Eliminar' })) {
-      update(d => { d.tournaments = d.tournaments.filter(x => x.id !== t.id); return d; });
+    if (await uiConfirm('¿Eliminar este torneo y todos sus partidos?', { destructive:true, okLabel:'Eliminar' })) {
+      notifyDelete(`${t.name} eliminado`, d => { d.tournaments = d.tournaments.filter(x => x.id !== t.id); return d; });
       go('#/torneos');
     }
+  };
+
+  const duplicateTournament = () => {
+    const nt = buildTournament({
+      name: `${t.name} (nuevo)`, format: t.format, teamIds: t.teamIds,
+      idaVuelta: t.config.idaVuelta, numGroups: t.config.numGroups, fixtureMode: t.config.fixtureMode
+    });
+    update(d => { d.tournaments.push(nt); return d; });
+    go('#/torneo/' + nt.id);
   };
 
   const fixtureDone = t.format==='liga' && !manual && t.matches.length>0 && t.matches.every(m=>m.played);
@@ -1531,8 +1813,15 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
       )}
       {tab==='partidos' && <MatchList t={t} playersById={playersById} clubsById={clubsById}
         manual={manual} onEdit={setEditMatch} />}
-      {tab==='tabla' && !isGroups && <StandingsTable teamIds={t.teamIds} matches={t.matches}
-        playersById={playersById} />}
+      {tab==='tabla' && !isGroups && (
+        <React.Fragment>
+          <StandingsTable teamIds={t.teamIds} matches={t.matches}
+            playersById={playersById} />
+          <button className="btn ghost sm" style={{marginTop:12}}
+            onClick={()=>shareStandingsImage(t.name, computeStandings(t.teamIds, t.matches, playersById), playersById)}>
+            📤 Compartir tabla</button>
+        </React.Fragment>
+      )}
       {tab==='tabla' && isGroups && <GroupTables t={t} playersById={playersById} />}
       {tab==='bracket' && <Bracket matches={t.matches.filter(m=>m.stage==='ko')}
         playersById={playersById} clubsById={clubsById} onEdit={setEditMatch} />}
@@ -1546,9 +1835,12 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
           🏆 Finalizar y coronar al líder</button>
       )}
 
-      <button className="btn danger" style={{marginTop:24}} onClick={removeTournament}>Eliminar torneo</button>
+      <div className="row" style={{marginTop:24}}>
+        <button className="btn ghost sm" style={{flex:1}} onClick={duplicateTournament}>🎲 Duplicar torneo</button>
+        <button className="btn danger sm" style={{flex:1}} onClick={removeTournament}>Eliminar torneo</button>
+      </div>
 
-      {editMatch && <ScoreEditor match={editMatch} playersById={playersById} clubs={db.clubs} onAddClub={addClub}
+      {editMatch && <ScoreEditor match={editMatch} playersById={playersById} clubsById={clubsById} clubs={db.clubs} onAddClub={addClub}
         onSave={saveResult} onDelete={manual ? deleteMatch : null} onClose={()=>setEditMatch(null)} />}
       {adding && <AddMatchSheet t={t} playersById={playersById} clubs={db.clubs} onAddClub={addClub}
         onSave={addManualMatch} onClose={()=>setAdding(false)} />}
@@ -1558,21 +1850,45 @@ function TournamentView({ t, db, update, playersById, clubsById }) {
 }
 
 function MatchList({ t, playersById, clubsById, manual, onEdit }) {
-  const ms = t.matches.filter(m => m.stage !== 'ko');
-  if (ms.length === 0) return (
+  const [q, setQ] = useState('');
+  const all = t.matches.filter(m => m.stage !== 'ko');
+  const query = q.trim().toLowerCase();
+  const matches = query ? all.filter(m => {
+    const names = [playersById[m.teamA]?.name, playersById[m.teamB]?.name,
+      clubsById[m.clubA]?.name, clubsById[m.clubB]?.name].filter(Boolean).join(' ').toLowerCase();
+    return names.includes(query);
+  }) : all;
+
+  if (all.length === 0) return (
     <div className="empty"><div className="big">📋</div>
       <p>{manual ? 'Aún no hay partidos registrados.\nToca "Registrar partido" cuando jueguen.' : 'Sin partidos.'}</p></div>
   );
+
+  const SearchBox = all.length > 4 && (
+    <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Buscar jugador o club..."
+      style={{width:'100%',marginBottom:12,padding:'11px 14px',background:'var(--surface2)',
+      border:'1px solid var(--line)',borderRadius:12,color:'var(--text)',outline:'none',fontSize:14}} />
+  );
+
+  if (matches.length === 0) return (
+    <React.Fragment>
+      {SearchBox}
+      <p style={{fontSize:12,color:'var(--muted)',textAlign:'center',padding:'20px 0'}}>
+        Sin resultados para "{q}".</p>
+    </React.Fragment>
+  );
+
   if (manual) {
-    const sorted = [...ms].sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
+    const sorted = [...matches].sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
     return (
       <React.Fragment>
+        {SearchBox}
         {sorted.map(m => <MatchRow key={m.id} m={m} playersById={playersById} clubsById={clubsById} onEdit={onEdit} />)}
       </React.Fragment>
     );
   }
   const byRound = {};
-  ms.forEach(m => {
+  matches.forEach(m => {
     const key = m.group ? `Grupo ${m.group} · Fecha ${m.round}` : `Fecha ${m.round}`;
     (byRound[key] = byRound[key] || []).push(m);
   });
@@ -1583,6 +1899,7 @@ function MatchList({ t, playersById, clubsById, manual, onEdit }) {
   });
   return (
     <React.Fragment>
+      {SearchBox}
       {keys.map(k => (
         <React.Fragment key={k}>
           <div className="mrow-tag">{k}</div>
@@ -1746,7 +2063,7 @@ function ClubSheet({ clubs, value, onPick, onAddClub, onClose }) {
 }
 
 /* ============ EDITOR DE MARCADOR ============ */
-function ScoreEditor({ match, playersById, clubs, onAddClub, onSave, onDelete, onClose }) {
+function ScoreEditor({ match, playersById, clubsById, clubs, onAddClub, onSave, onDelete, onClose }) {
   const [gA, setGA] = useState(match.golesA ?? 0);
   const [gB, setGB] = useState(match.golesB ?? 0);
   const [pA, setPA] = useState(match.penA ?? 0);
@@ -1821,6 +2138,11 @@ function ScoreEditor({ match, playersById, clubs, onAddClub, onSave, onDelete, o
         <button className="btn primary" style={{marginTop:14}} disabled={!pensValid}
           onClick={()=>onSave(match.id, gA, gB, needsPens?pA:null, needsPens?pB:null, cA, cB)}>
           ✅ Guardar resultado</button>
+        {match.played && (
+          <button className="btn ghost" style={{marginTop:10}}
+            onClick={()=>shareMatchImage({ ...match, golesA:gA, golesB:gB, penA: needsPens?pA:match.penA, penB: needsPens?pB:match.penB, clubA:cA, clubB:cB }, playersById, clubsById)}>
+            📤 Compartir resultado</button>
+        )}
         {onDelete && match.played && (
           <button className="btn danger" style={{marginTop:10}} onClick={()=>onDelete(match.id)}>
             Eliminar partido</button>
