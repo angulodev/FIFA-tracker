@@ -137,7 +137,9 @@ input,select{font-family:inherit;font-size:16px}
 .table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
   padding:8px 4px;text-align:center;border-bottom:1px solid var(--line)}
 .table td{padding:10px 4px;text-align:center;border-bottom:1px solid var(--line)}
-.table .tname{text-align:left;font-weight:600;display:flex;align-items:center;gap:6px}
+.table .tname{text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:150px}
+.table .tname .pos{margin-right:5px}
 .table tr.q td:first-child{box-shadow:inset 3px 0 0 var(--volt)}
 .table .pts{font-family:'Anton';font-size:15px;color:var(--volt)}
 .pos{color:var(--muted);font-size:11px}
@@ -347,6 +349,37 @@ function playerRecord(playerId, tournaments) {
       }
     });
   });
+  return r;
+}
+
+function matchesOfPlayer(playerId, tournaments) {
+  const out = [];
+  tournaments.forEach(t => t.matches.forEach(m => {
+    if (m.played && !m.bye && (m.teamA === playerId || m.teamB === playerId))
+      out.push({ ...m, tName: t.name });
+  }));
+  return out.sort((a, b) => (b.playedAt || 0) - (a.playedAt || 0));
+}
+function matchesOfClub(clubId, tournaments) {
+  const out = [];
+  tournaments.forEach(t => t.matches.forEach(m => {
+    if (m.played && !m.bye && (m.clubA === clubId || m.clubB === clubId))
+      out.push({ ...m, tName: t.name });
+  }));
+  return out.sort((a, b) => (b.playedAt || 0) - (a.playedAt || 0));
+}
+// Récord de un jugador filtrado por club, o cara a cara contra un rival
+function recordWhere(tournaments, fn) {
+  const r = { pj:0, g:0, e:0, p:0, gf:0, gc:0 };
+  tournaments.forEach(t => t.matches.forEach(m => {
+    if (!m.played || m.bye) return;
+    const side = fn(m);
+    if (!side) return;
+    const my = side === 'A' ? m.golesA : m.golesB;
+    const their = side === 'A' ? m.golesB : m.golesA;
+    r.pj++; r.gf += my; r.gc += their;
+    my > their ? r.g++ : my < their ? r.p++ : r.e++;
+  }));
   return r;
 }
 
@@ -589,6 +622,14 @@ function App() {
     screen = <PlayersView db={db} update={update} />; tab = 'jugadores';
   } else if (hash === '#/clubes') {
     screen = <ClubsView db={db} update={update} />; tab = 'clubes';
+  } else if (hash.startsWith('#/jugador/')) {
+    const id = hash.split('/')[2];
+    screen = <PlayerDetail key={id} id={id} db={db} update={update} playersById={playersById} clubsById={clubsById} />;
+    tab = 'jugadores';
+  } else if (hash.startsWith('#/club/')) {
+    const id = hash.split('/')[2];
+    screen = <ClubDetail key={id} id={id} db={db} update={update} playersById={playersById} clubsById={clubsById} />;
+    tab = 'clubes';
   } else if (hash === '#/torneos') {
     screen = <TournamentsList db={db} playersById={playersById} />; tab = 'torneos';
   } else {
@@ -657,6 +698,43 @@ function ClubBadge({ name, logo, flag, size = 16 }) {
   return (
     <span className="cbadge" style={{ width: size, height: size, fontSize: Math.round(size * 0.42),
       background: `hsl(${hue} 55% 26%)`, borderColor: `hsl(${hue} 75% 48%)` }}>{initials}</span>
+  );
+}
+
+/* ============ GRÁFICOS ============ */
+function GEPBar({ g, e, p }) {
+  const total = g + e + p;
+  if (!total) return null;
+  return (
+    <React.Fragment>
+      <div className="gep">
+        {g > 0 && <div className="seg g" style={{width:(g/total*100)+'%'}} />}
+        {e > 0 && <div className="seg e" style={{width:(e/total*100)+'%'}} />}
+        {p > 0 && <div className="seg p" style={{width:(p/total*100)+'%'}} />}
+      </div>
+      <div className="gep-legend">
+        <span style={{color:'var(--volt)'}}>▮ {g} ganados</span>
+        <span>▮ {e} empatados</span>
+        <span style={{color:'var(--danger)'}}>▮ {p} perdidos</span>
+      </div>
+    </React.Fragment>
+  );
+}
+function Spark({ values, labels }) {
+  if (!values.length) return null;
+  const max = Math.max(...values, 1);
+  return (
+    <React.Fragment>
+      <div className="spark">
+        {values.map((v, i) => (
+          <div key={i} className={'bar'+(v===0?' zero':'')}
+            style={{height: Math.max(6, v/max*100)+'%'}} title={v} />
+        ))}
+      </div>
+      <div className="spark-labels">
+        {values.map((v, i) => <span key={i}>{v}</span>)}
+      </div>
+    </React.Fragment>
   );
 }
 
@@ -782,6 +860,120 @@ function TournamentsList({ db, playersById }) {
   );
 }
 
+/* ============ FICHA DE JUGADOR ============ */
+function PlayerDetail({ id, db, update, playersById, clubsById }) {
+  const [editing, setEditing] = useState(false);
+  const p = playersById[id];
+  if (!p) return <div className="empty"><div className="big">🤷</div>Jugador no encontrado</div>;
+  const r = playerRecord(id, db.tournaments);
+  const ms = matchesOfPlayer(id, db.tournaments);
+  const golesPorPartido = [...ms].reverse().slice(-12)
+    .map(m => m.teamA === id ? m.golesA : m.golesB);
+
+  // Clubes que ha usado
+  const clubIds = [...new Set(ms.map(m => m.teamA === id ? m.clubA : m.clubB).filter(Boolean))];
+  const clubRecs = clubIds.map(cid => ({
+    club: clubsById[cid],
+    r: recordWhere(db.tournaments, m =>
+      (m.teamA === id && m.clubA === cid) ? 'A' : (m.teamB === id && m.clubB === cid) ? 'B' : null)
+  })).filter(x => x.club).sort((a,b) => b.r.pj - a.r.pj);
+
+  // Cara a cara contra cada rival
+  const rivals = db.players.filter(x => x.id !== id).map(riv => ({
+    riv,
+    r: recordWhere(db.tournaments, m =>
+      (m.teamA === id && m.teamB === riv.id) ? 'A' : (m.teamB === id && m.teamA === riv.id) ? 'B' : null)
+  })).filter(x => x.r.pj > 0).sort((a,b) => b.r.pj - a.r.pj);
+
+  const savePlayer = (pl) => {
+    update(d => { const i = d.players.findIndex(x => x.id === pl.id); d.players[i] = pl; return d; });
+    setEditing(false);
+  };
+
+  return (
+    <React.Fragment>
+      <button onClick={()=>go('#/jugadores')} style={{color:'var(--muted)',fontSize:12,marginBottom:8}}>← Jugadores</button>
+      <div className="row" style={{marginBottom:4}}>
+        <div style={{fontSize:44}}>{p.emoji}</div>
+        <div className="grow">
+          <h2 className="display" style={{fontSize:24}}>{p.name}</h2>
+          {r.titulos > 0 && <div style={{fontSize:13}}>{'🏆'.repeat(Math.min(r.titulos,8))} {r.titulos} título{r.titulos>1?'s':''}</div>}
+        </div>
+        <button className="btn ghost sm" onClick={()=>setEditing(true)}>Editar</button>
+      </div>
+
+      {r.pj === 0 ? (
+        <div className="empty"><div className="big">📊</div><p>Sin partidos todavía.<br/>Las estadísticas aparecerán cuando juegue.</p></div>
+      ) : (
+        <React.Fragment>
+          <div className="big-stat-row">
+            <div className="big-stat"><div className="n">{r.pj}</div><div className="l">Jugados</div></div>
+            <div className="big-stat"><div className="n">{Math.round(r.g/r.pj*100)}%</div><div className="l">Victorias</div></div>
+            <div className="big-stat"><div className="n">{r.gf}</div><div className="l">Goles</div></div>
+            <div className="big-stat"><div className="n">{r.gf-r.gc>0?'+':''}{r.gf-r.gc}</div><div className="l">Dif. gol</div></div>
+          </div>
+
+          <div className="card">
+            <div className="eyebrow">Resultados</div>
+            <GEPBar g={r.g} e={r.e} p={r.p} />
+          </div>
+
+          {golesPorPartido.length >= 2 && (
+            <div className="card">
+              <div className="eyebrow">Goles por partido (últimos {golesPorPartido.length})</div>
+              <Spark values={golesPorPartido} />
+            </div>
+          )}
+
+          {clubRecs.length > 0 && (
+            <React.Fragment>
+              <div className="section-title">Sus clubes</div>
+              {clubRecs.map(({club, r:cr}) => (
+                <div className="card" key={club.id}>
+                  <div className="row">
+                    <ClubBadge name={club.name} logo={club.logo} flag={club.flag} size={26} />
+                    <div className="grow">
+                      <div style={{fontWeight:700,fontSize:14}}>{club.name}</div>
+                      <div style={{fontSize:11,color:'var(--muted)'}}>{cr.pj} PJ · {cr.g}G {cr.e}E {cr.p}P · {cr.gf}:{cr.gc}</div>
+                    </div>
+                    <div className="display" style={{fontSize:16,color:'var(--volt)'}}>{Math.round(cr.g/cr.pj*100)}%</div>
+                  </div>
+                </div>
+              ))}
+            </React.Fragment>
+          )}
+
+          {rivals.length > 0 && (
+            <React.Fragment>
+              <div className="section-title">Cara a cara</div>
+              {rivals.map(({riv, r:hr}) => (
+                <div className="card tap" key={riv.id} onClick={()=>go('#/jugador/'+riv.id)}>
+                  <div className="row">
+                    <div style={{fontSize:22}}>{riv.emoji}</div>
+                    <div className="grow">
+                      <div style={{fontWeight:700,fontSize:14}}>vs {riv.name}</div>
+                      <div style={{fontSize:11,color:'var(--muted)'}}>{hr.pj} PJ · goles {hr.gf}:{hr.gc}</div>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:700}}>
+                      <span style={{color:'var(--volt)'}}>{hr.g}G</span> <span style={{color:'var(--muted)'}}>{hr.e}E</span> <span style={{color:'var(--danger)'}}>{hr.p}P</span></div>
+                  </div>
+                </div>
+              ))}
+            </React.Fragment>
+          )}
+
+          <div className="section-title">Últimos partidos</div>
+          {ms.slice(0,6).map(m => (
+            <MatchRow key={m.id} m={m} playersById={playersById} clubsById={clubsById} onEdit={null} />
+          ))}
+        </React.Fragment>
+      )}
+
+      {editing && <PlayerEditor player={p} onSave={savePlayer} onClose={()=>setEditing(false)} />}
+    </React.Fragment>
+  );
+}
+
 /* ============ JUGADORES & CLUBES ============ */
 function PlayersView({ db, update }) {
   const [editing, setEditing] = useState(null);
@@ -841,7 +1033,7 @@ function PlayersView({ db, update }) {
       {db.players.map(p => {
         const r = playerRecord(p.id, db.tournaments);
         return (
-          <div className="card" key={p.id}>
+          <div className="card tap" key={p.id} onClick={()=>go('#/jugador/'+p.id)}>
             <div className="row">
               <div style={{fontSize:30}}>{p.emoji}</div>
               <div className="grow">
@@ -849,8 +1041,8 @@ function PlayersView({ db, update }) {
                 <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
                   {r.pj > 0 ? `${r.pj} PJ · ${r.g}G ${r.e}E ${r.p}P · ${r.gf}:${r.gc}` : 'Sin partidos aún'}</div>
               </div>
-              <button className="btn ghost sm" onClick={()=>setEditing(p)}>Editar</button>
-              <button className="btn danger sm" onClick={()=>removePlayer(p.id)}>✕</button>
+              <button className="btn ghost sm" onClick={e=>{e.stopPropagation(); setEditing(p);}}>Editar</button>
+              <button className="btn danger sm" onClick={e=>{e.stopPropagation(); removePlayer(p.id);}}>✕</button>
             </div>
           </div>
         );
@@ -898,10 +1090,109 @@ function PlayerEditor({ player, onSave, onClose }) {
   );
 }
 
+/* ============ FICHA DE CLUB ============ */
+function ClubDetail({ id, db, update, playersById, clubsById }) {
+  const [editing, setEditing] = useState(false);
+  const [dialog, setDialog] = useState(null);
+  const c = clubsById[id];
+  if (!c) return <div className="empty"><div className="big">🤷</div>Club no encontrado</div>;
+  const r = clubRecord(id, db.tournaments);
+  const ms = matchesOfClub(id, db.tournaments);
+  const golesPorPartido = [...ms].reverse().slice(-12)
+    .map(m => m.clubA === id ? m.golesA : m.golesB);
+
+  // Quién lo ha usado
+  const userRecs = db.players.map(p => ({
+    p,
+    r: recordWhere(db.tournaments, m =>
+      (m.teamA === p.id && m.clubA === id) ? 'A' : (m.teamB === p.id && m.clubB === id) ? 'B' : null)
+  })).filter(x => x.r.pj > 0).sort((a,b) => b.r.pj - a.r.pj);
+
+  const saveClub = (club) => {
+    update(d => { const i = d.clubs.findIndex(x => x.id === club.id); d.clubs[i] = club; return d; });
+    setEditing(false);
+  };
+  const deleteClub = (cid) => {
+    setDialog({ message:`¿Eliminar el club ${c.name}? Los partidos ya jugados lo dejarán de mostrar.`,
+      danger:true, confirmLabel:'Eliminar', onConfirm: () => {
+        update(d => { d.clubs = d.clubs.filter(x => x.id !== cid); return d; });
+        go('#/clubes');
+      }});
+  };
+
+  return (
+    <React.Fragment>
+      <button onClick={()=>go('#/clubes')} style={{color:'var(--muted)',fontSize:12,marginBottom:8}}>← Clubes</button>
+      <div className="row" style={{marginBottom:4}}>
+        <ClubBadge name={c.name} logo={c.logo} flag={c.flag} size={44} />
+        <div className="grow"><h2 className="display" style={{fontSize:24}}>{c.name}</h2></div>
+        <button className="btn ghost sm" onClick={()=>setEditing(true)}>Editar</button>
+      </div>
+
+      {r.pj === 0 ? (
+        <div className="empty"><div className="big">📊</div><p>Sin partidos todavía con este club.</p></div>
+      ) : (
+        <React.Fragment>
+          <div className="big-stat-row">
+            <div className="big-stat"><div className="n">{r.pj}</div><div className="l">Jugados</div></div>
+            <div className="big-stat"><div className="n">{Math.round(r.g/r.pj*100)}%</div><div className="l">Victorias</div></div>
+            <div className="big-stat"><div className="n">{r.gf}</div><div className="l">Goles</div></div>
+            <div className="big-stat"><div className="n">{r.gc}</div><div className="l">En contra</div></div>
+          </div>
+
+          <div className="card">
+            <div className="eyebrow">Resultados</div>
+            <GEPBar g={r.g} e={r.e} p={r.p} />
+          </div>
+
+          {golesPorPartido.length >= 2 && (
+            <div className="card">
+              <div className="eyebrow">Goles por partido (últimos {golesPorPartido.length})</div>
+              <Spark values={golesPorPartido} />
+            </div>
+          )}
+
+          {userRecs.length > 0 && (
+            <React.Fragment>
+              <div className="section-title">Quién lo usa</div>
+              {userRecs.map(({p, r:ur}) => (
+                <div className="card tap" key={p.id} onClick={()=>go('#/jugador/'+p.id)}>
+                  <div className="row">
+                    <div style={{fontSize:22}}>{p.emoji}</div>
+                    <div className="grow">
+                      <div style={{fontWeight:700,fontSize:14}}>{p.name}</div>
+                      <div style={{fontSize:11,color:'var(--muted)'}}>{ur.pj} PJ · {ur.g}G {ur.e}E {ur.p}P · {ur.gf}:{ur.gc}</div>
+                    </div>
+                    <div className="display" style={{fontSize:16,color:'var(--volt)'}}>{Math.round(ur.g/ur.pj*100)}%</div>
+                  </div>
+                </div>
+              ))}
+            </React.Fragment>
+          )}
+
+          <div className="section-title">Últimos partidos</div>
+          {ms.slice(0,6).map(m => (
+            <MatchRow key={m.id} m={m} playersById={playersById} clubsById={clubsById} onEdit={null} />
+          ))}
+        </React.Fragment>
+      )}
+
+      <button className="btn danger" style={{marginTop:20}} onClick={()=>deleteClub(id)}>Eliminar club</button>
+      {editing && <ClubEditor club={c} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditing(false)} />}
+      <Dialog d={dialog} onClose={()=>setDialog(null)} />
+    </React.Fragment>
+  );
+}
+
 /* ============ CLUBES (vista con estadísticas) ============ */
 function ClubsView({ db, update }) {
   const [editingClub, setEditingClub] = useState(null);
   const [dialog, setDialog] = useState(null);
+  const [catQ, setCatQ] = useState('');
+  const myNames = new Set(db.clubs.map(c => c.name.toLowerCase()));
+  const q = catQ.trim().toLowerCase();
+  const catalogFiltered = (q ? CLUB_CATALOG.filter(c => c.name.toLowerCase().includes(q)) : CLUB_CATALOG)
+    .slice().sort((a, b) => a.name.localeCompare(b.name));
 
   const saveClub = (club) => {
     update(d => {
@@ -926,7 +1217,7 @@ function ClubsView({ db, update }) {
   const unused = withStats.filter(c => c.r.pj === 0);
 
   const ClubCard = ({ c }) => (
-    <div className="card tap" onClick={()=>setEditingClub(c)}>
+    <div className="card tap" onClick={()=>go('#/club/'+c.id)}>
       <div className="row">
         <ClubBadge name={c.name} logo={c.logo} flag={c.flag} size={30} />
         <div className="grow">
@@ -951,6 +1242,29 @@ function ClubsView({ db, update }) {
       {used.map(c => <ClubCard key={c.id} c={c} />)}
       {unused.length > 0 && <div className="section-title">Sin estrenar ({unused.length})</div>}
       {unused.map(c => <ClubCard key={c.id} c={c} />)}
+
+      <div className="section-title">Catálogo ({CLUB_CATALOG.length})</div>
+      <input value={catQ} onChange={e=>setCatQ(e.target.value)}
+        placeholder={'Buscar entre '+CLUB_CATALOG.length+' clubes y selecciones...'}
+        style={{width:'100%',marginBottom:10,padding:'12px 14px',background:'var(--surface2)',
+        border:'1px solid var(--line)',borderRadius:12,color:'var(--text)',outline:'none'}} />
+      <div className="club-list" style={{maxHeight:'none'}}>
+        {catalogFiltered.map((c, i) => {
+          const added = myNames.has(c.name.toLowerCase());
+          return (
+            <button key={'cat'+i} className="club-item" disabled={added}
+              style={added?{opacity:.45}:{}}
+              onClick={()=>{ if(!added) update(d => { d.clubs.push({ id: uid(), name: c.name, logo: c.logo || null, flag: c.flag || null }); return d; }); }}>
+              <ClubBadge name={c.name} logo={c.logo} flag={c.flag} size={22} /> {c.name}
+              <span className="chk" style={{color: added?'var(--volt)':'var(--muted)', fontSize:12}}>
+                {added ? '✓ agregado' : '＋ agregar'}</span>
+            </button>
+          );
+        })}
+        {catalogFiltered.length === 0 && <p style={{fontSize:12,color:'var(--muted)',padding:'14px 10px'}}>
+          Sin resultados para "{catQ}". Puedes crearlo con el botón "+ Nuevo club".</p>}
+      </div>
+
       {editingClub && <ClubEditor club={editingClub} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditingClub(null)} />}
       <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
@@ -1281,7 +1595,7 @@ function MatchList({ t, playersById, clubsById, manual, onEdit }) {
 
 function MatchRow({ m, playersById, clubsById, onEdit }) {
   return (
-    <div className="mrow" onClick={()=>onEdit(m)} style={{cursor:'pointer'}}>
+    <div className="mrow" onClick={()=>onEdit && onEdit(m)} style={onEdit?{cursor:'pointer'}:{}}>
       <div className="t"><PlayerTag id={m.teamA} playersById={playersById} club={clubsById[m.clubA]} /></div>
       <div className={'mid'+(m.played?'':' pend')}>
         {m.played ? `${m.golesA} - ${m.golesB}` : 'VS'}</div>
