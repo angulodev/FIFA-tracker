@@ -924,7 +924,7 @@ async function shareStandingsImage(title, standings, playersById) {
     ctx.textAlign = 'left'; ctx.fillStyle = i===0 ? '#C8F135' : '#EEF6EA'; ctx.font = '700 34px Archivo, sans-serif';
     ctx.fillText(`${i+1}  ${p?.emoji||''} ${p?.name||''}`, 60, y);
     ctx.textAlign = 'center'; ctx.font = '30px Archivo, sans-serif'; ctx.fillStyle = '#EEF6EA';
-    [s.pj, s.g, s.e, s.p].forEach((v,j) => ctx.fillText(String(v), 640+j*75, y));
+    [s.pj, s.pg, s.pe, s.pp].forEach((v,j) => ctx.fillText(String(v), 640+j*75, y));
     const dg = s.gf-s.gc;
     ctx.fillText((dg>0?'+':'')+dg, 640+4*75, y);
     ctx.fillStyle = '#C8F135'; ctx.font = '800 34px Archivo, sans-serif';
