@@ -1828,7 +1828,10 @@ function NewTournament({ db, update }) {
 
   const toggle = (id) => setSelected(s => s.includes(id) ? s.filter(x=>x!==id) : [...s, id]);
   const min = format === 'grupos' ? numGroups * 2 : 2;
-  const valid = name.trim() && selected.length >= min;
+  const missing = [];
+  if (!name.trim()) missing.push('el nombre del torneo');
+  if (selected.length < min) missing.push(`seleccionar ${min} jugadores (llevas ${selected.length})`);
+  const valid = missing.length === 0;
 
   const create = () => {
     const manual = format === 'liga' && fixtureMode === 'manual';
@@ -1842,7 +1845,7 @@ function NewTournament({ db, update }) {
     <React.Fragment>
       <h2 className="display" style={{fontSize:20,marginBottom:14}}>Nuevo torneo</h2>
       <div className="field">
-        <label>Nombre del torneo</label>
+        <label>Nombre del torneo <span style={{color:'var(--danger)'}}>*</span></label>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Liga de los Viernes" />
       </div>
       <div className="field">
@@ -1887,7 +1890,8 @@ function NewTournament({ db, update }) {
         </div>
       )}
       <div className="field">
-        <label>Jugadores ({selected.length} seleccionados · mínimo {min})</label>
+        <label style={selected.length < min ? {color:'var(--danger)'} : {}}>
+          Jugadores <span style={{color:'var(--danger)'}}>*</span> ({selected.length} seleccionados · mínimo {min})</label>
         {db.players.length < 2 && (
           <div className="empty" style={{padding:'18px 10px'}}>
             <p>Necesitas jugadores primero.</p>
@@ -1909,6 +1913,10 @@ function NewTournament({ db, update }) {
             {db.seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
+      )}
+      {missing.length > 0 && (
+        <p style={{fontSize:12.5,color:'var(--danger)',textAlign:'center',marginBottom:10,lineHeight:1.5}}>
+          ⚠️ Falta {missing.join(' y ')}.</p>
       )}
       <button className="btn primary" disabled={!valid} onClick={create}>
         {format==='liga'&&fixtureMode==='manual' ? '✍️ Crear liga libre' : '🎲 Sortear y crear torneo'}</button>
