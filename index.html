@@ -197,9 +197,6 @@ input,select{font-family:inherit;font-size:16px}
 .overlay.center{align-items:center;padding:24px}
 .dialog{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);
   border-radius:18px;padding:20px;animation:fadeIn .15s ease}
-.dialog h3{font-family:'Anton';font-size:15px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px}
-.dialog p{font-size:14px;line-height:1.45;color:var(--text);margin-bottom:16px}
-.btn.danger-solid{background:var(--danger);color:#fff}
 
 /* Selector de club */
 .club-btn{width:100%;margin-top:6px;padding:9px 10px;background:var(--surface2);
@@ -305,7 +302,7 @@ const loadDB = () => {
   }
   players = players.map(p => ({ emoji: '🎮', ...p }));
   const tournaments = (d.tournaments || []).map(t => ({
-    ...t, config: { fixtureMode: 'sorteo', ...(t.config || {}) } }));
+    ...t, seasonId: t.seasonId || null, config: { fixtureMode: 'sorteo', ...(t.config || {}) } }));
   // Ya no se precargan clubes: la lista arranca vacía y se completa buscando
   // en el catálogo de 207 al registrar un partido, o creando uno propio.
   let clubs = d.clubs || [];
@@ -323,7 +320,8 @@ const loadDB = () => {
     }
     return c;
   });
-  return { players, clubs, tournaments };
+  const seasons = d.seasons || [];
+  return { players, clubs, tournaments, seasons };
 };
 const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
 
@@ -443,6 +441,34 @@ function playerAchievements(playerId, tournaments) {
     if (my > their) maxMargin = Math.max(maxMargin, my - their);
   });
   return ACHIEVEMENTS.filter(a => a.check(r, { streak, maxMargin }));
+}
+
+/* ============ ELO ============ */
+const ELO_BASE = 1000, ELO_K = 32;
+// Recalcula el ranking ELO completo repasando todos los partidos en orden cronológico.
+// Puro y derivado: no se guarda en ningún lado, siempre se recalcula desde el historial real.
+function computeElo(players, tournaments) {
+  const ratings = {}, history = {};
+  players.forEach(p => { ratings[p.id] = ELO_BASE; history[p.id] = [{ playedAt: 0, rating: ELO_BASE }]; });
+  const all = [];
+  tournaments.forEach(t => t.matches.forEach(m => {
+    if (m.played && !m.bye && ratings[m.teamA] !== undefined && ratings[m.teamB] !== undefined) all.push(m);
+  }));
+  all.sort((a, b) => (a.playedAt || 0) - (b.playedAt || 0));
+  all.forEach(m => {
+    const Ra = ratings[m.teamA], Rb = ratings[m.teamB];
+    const Ea = 1 / (1 + Math.pow(10, (Rb - Ra) / 400));
+    const Sa = m.golesA > m.golesB ? 1 : m.golesA < m.golesB ? 0 : 0.5;
+    ratings[m.teamA] = Math.round(Ra + ELO_K * (Sa - Ea));
+    ratings[m.teamB] = Math.round(Rb + ELO_K * ((1 - Sa) - (1 - Ea)));
+    history[m.teamA].push({ playedAt: m.playedAt, rating: ratings[m.teamA] });
+    history[m.teamB].push({ playedAt: m.playedAt, rating: ratings[m.teamB] });
+  });
+  return { ratings, history };
+}
+function eloRanking(players, tournaments) {
+  const { ratings } = computeElo(players, tournaments);
+  return players.map(p => ({ p, elo: ratings[p.id] })).sort((a, b) => b.elo - a.elo);
 }
 
 /* ============ ENGINE (puro) ============ */
@@ -733,6 +759,12 @@ function App() {
     tab = 'clubes';
   } else if (hash === '#/torneos') {
     screen = <TournamentsList db={db} playersById={playersById} />; tab = 'torneos';
+  } else if (hash === '#/temporadas') {
+    screen = <SeasonsList db={db} update={update} notifyDelete={notifyDelete} playersById={playersById} />; tab = 'torneos';
+  } else if (hash.startsWith('#/temporada/')) {
+    const id = hash.split('/')[2];
+    screen = <SeasonDetail key={id} id={id} db={db} update={update} notifyDelete={notifyDelete} playersById={playersById} />;
+    tab = 'torneos';
   } else {
     screen = <Dashboard db={db} playersById={playersById} clubsById={clubsById} />; tab = 'inicio';
   }
@@ -975,31 +1007,23 @@ function Spark({ values, labels }) {
     </React.Fragment>
   );
 }
-
-/* ============ DIÁLOGOS (no nativos) ============ */
-function Dialog({ d, onClose }) {
-  if (!d) return null;
-  const isConfirm = !!d.onConfirm;
+// Tendencia de ELO: normaliza al min/max propio del historial (no a 0) para que
+// las subidas y bajadas se noten aunque el rating se mueva en un rango angosto.
+function EloTrend({ history }) {
+  const vals = history.slice(-16).map(h => h.rating);
+  if (vals.length < 4) return null;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = Math.max(max - min, 1);
   return (
-    <div className="overlay center" style={{zIndex:70}} onClick={onClose}>
-      <div className="dialog" onClick={e=>e.stopPropagation()}>
-        <h3 className="display">{d.title || (isConfirm ? 'Confirmar' : 'Aviso')}</h3>
-        <p>{d.message}</p>
-        <div className="row">
-          {isConfirm ? (
-            <React.Fragment>
-              <button className="btn ghost sm" style={{flex:1}} onClick={onClose}>Cancelar</button>
-              <button className={'btn sm '+(d.danger?'danger-solid':'primary')} style={{flex:1}}
-                onClick={()=>{ d.onConfirm(); onClose(); }}>{d.confirmLabel || 'Aceptar'}</button>
-            </React.Fragment>
-          ) : (
-            <button className="btn primary sm" style={{flex:1}} onClick={onClose}>Entendido</button>
-          )}
-        </div>
-      </div>
+    <div className="spark" style={{marginTop:10,height:40}}>
+      {vals.map((v, i) => (
+        <div key={i} className="bar" title={v}
+          style={{height: (10 + (v-min)/range*90)+'%', opacity: i===vals.length-1?1:0.55}} />
+      ))}
     </div>
   );
 }
+
 
 /* ============ DASHBOARD ============ */
 function Dashboard({ db, playersById, clubsById }) {
@@ -1032,6 +1056,27 @@ function Dashboard({ db, playersById, clubsById }) {
           <div style={{fontSize:12,color:'var(--muted)'}}>{topChamp[1]} título{topChamp[1]>1?'s':''}</div>
         </div>
       )}
+
+      {(() => {
+        const rank = eloRanking(db.players, db.tournaments).filter(x => x.elo !== ELO_BASE || playerRecord(x.p.id, db.tournaments).pj > 0);
+        if (rank.length < 2) return null;
+        return (
+          <React.Fragment>
+            <div className="section-title">🏅 Ranking ELO</div>
+            <div className="card">
+              {rank.slice(0,5).map((x, i) => (
+                <div key={x.p.id} className="row tap" style={{padding:'6px 0',cursor:'pointer'}}
+                  onClick={()=>go('#/jugador/'+x.p.id)}>
+                  <span className="pos" style={{width:16}}>{i+1}</span>
+                  <span style={{fontSize:18}}>{x.p.emoji}</span>
+                  <span className="grow" style={{fontWeight:600,fontSize:14}}>{x.p.name}</span>
+                  <span className="display" style={{fontSize:16,color:'var(--volt)'}}>{x.elo}</span>
+                </div>
+              ))}
+            </div>
+          </React.Fragment>
+        );
+      })()}
 
       {(() => {
         const scorers = topScorers(db.players, db.tournaments, 3);
@@ -1112,12 +1157,167 @@ function TournamentsList({ db, playersById }) {
   return (
     <React.Fragment>
       <button className="btn primary" onClick={()=>go('#/nuevo')}>+ Nuevo torneo</button>
+      <button className="btn ghost" style={{marginTop:8}} onClick={()=>go('#/temporadas')}>
+        📅 Temporadas {db.seasons.length > 0 && `(${db.seasons.length})`}</button>
       {sorted.length === 0
         ? <div className="empty"><div className="big">🏆</div><p>Aún no hay torneos.<br/>Crea el primero y que ruede la pelota.</p></div>
         : <React.Fragment>
             <div className="section-title">Todos los torneos</div>
             {sorted.map(t => <TournamentCard key={t.id} t={t} playersById={playersById} />)}
           </React.Fragment>}
+    </React.Fragment>
+  );
+}
+
+/* ============ TEMPORADAS ============ */
+function SeasonsList({ db, update, notifyDelete, playersById }) {
+  const [editing, setEditing] = useState(null);
+  const saveSeason = (s) => {
+    update(d => {
+      if (s.id) { const i = d.seasons.findIndex(x => x.id === s.id); d.seasons[i] = s; }
+      else d.seasons.push({ ...s, id: uid(), createdAt: Date.now() });
+      return d;
+    });
+    setEditing(null);
+  };
+  const sorted = [...db.seasons].sort((a,b) => b.createdAt - a.createdAt);
+  return (
+    <React.Fragment>
+      <button onClick={()=>go('#/torneos')} style={{color:'var(--muted)',fontSize:12,marginBottom:8}}>← Torneos</button>
+      <h2 className="display" style={{fontSize:20,marginBottom:4}}>Temporadas</h2>
+      <p style={{fontSize:12,color:'var(--muted)',marginBottom:14}}>
+        Agrupa varios torneos en una tabla acumulada, como una temporada de liga.</p>
+      <button className="btn primary" onClick={()=>setEditing({ name:'' })}>+ Nueva temporada</button>
+      {sorted.length === 0 ? (
+        <div className="empty"><div className="big">📅</div><p>Sin temporadas todavía.<br/>Créala y luego suma torneos al crearlos.</p></div>
+      ) : (
+        <React.Fragment>
+          <div className="section-title">Todas</div>
+          {sorted.map(s => {
+            const ts = db.tournaments.filter(t => t.seasonId === s.id);
+            const teamIds = [...new Set(ts.flatMap(t => t.teamIds))];
+            const leader = computeStandings(teamIds, ts.flatMap(t=>t.matches), playersById)[0];
+            return (
+              <div className="card tap" key={s.id} onClick={()=>go('#/temporada/'+s.id)}>
+                <div className="row">
+                  <div className="grow">
+                    <div className="display" style={{fontSize:17}}>{s.name}</div>
+                    <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{ts.length} torneo{ts.length!==1?'s':''} · {teamIds.length} jugadores</div>
+                  </div>
+                  {leader && playersById[leader.id] && (
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:11,color:'var(--muted)'}}>Líder</div>
+                      <div style={{fontWeight:700,fontSize:13}}>{playersById[leader.id].emoji} {playersById[leader.id].name}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </React.Fragment>
+      )}
+      {editing && <SeasonEditor season={editing} onSave={saveSeason} onClose={()=>setEditing(null)} />}
+    </React.Fragment>
+  );
+}
+
+function SeasonEditor({ season, onSave, onClose }) {
+  const [name, setName] = useState(season.name);
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e=>e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <h2 className="display">{season.id ? 'Editar temporada' : 'Nueva temporada'}</h2>
+        <div className="field">
+          <label>Nombre</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ej: Temporada 2026-1" autoFocus />
+        </div>
+        <button className="btn primary" disabled={!name.trim()}
+          onClick={()=>onSave({ ...season, name: name.trim() })}>Guardar temporada</button>
+      </div>
+    </div>
+  );
+}
+
+function SeasonDetail({ id, db, update, notifyDelete, playersById }) {
+  const [editing, setEditing] = useState(false);
+  const s = db.seasons.find(x => x.id === id);
+  if (!s) return <div className="empty"><div className="big">🤷</div>Temporada no encontrada</div>;
+
+  const ts = db.tournaments.filter(t => t.seasonId === id).sort((a,b) => a.createdAt - b.createdAt);
+  const teamIds = [...new Set(ts.flatMap(t => t.teamIds))];
+  const allMatches = ts.flatMap(t => t.matches);
+  const standings = computeStandings(teamIds, allMatches, playersById);
+  const scorers = topScorers(teamIds.map(id => playersById[id]).filter(Boolean), ts, 3);
+
+  const saveSeason = (upd) => {
+    update(d => { const i = d.seasons.findIndex(x => x.id === id); d.seasons[i] = upd; return d; });
+    setEditing(false);
+  };
+  const deleteSeason = async () => {
+    if (await uiConfirm('¿Eliminar esta temporada? Los torneos que contiene NO se borran, solo dejan de estar agrupados.',
+      { destructive:true, okLabel:'Eliminar' })) {
+      notifyDelete(`${s.name} eliminada`, d => {
+        d.seasons = d.seasons.filter(x => x.id !== id);
+        d.tournaments.forEach(t => { if (t.seasonId === id) t.seasonId = null; });
+        return d;
+      });
+      go('#/temporadas');
+    }
+  };
+  const removeFromSeason = (tid) => {
+    update(d => { const t = d.tournaments.find(x => x.id === tid); if (t) t.seasonId = null; return d; });
+  };
+
+  return (
+    <React.Fragment>
+      <button onClick={()=>go('#/temporadas')} style={{color:'var(--muted)',fontSize:12,marginBottom:8}}>← Temporadas</button>
+      <div className="row" style={{marginBottom:12}}>
+        <div className="grow">
+          <div className="eyebrow">{ts.length} torneo{ts.length!==1?'s':''} · {teamIds.length} jugadores</div>
+          <h2 className="display" style={{fontSize:22}}>{s.name}</h2>
+        </div>
+        <button className="btn ghost sm" onClick={()=>setEditing(true)}>Editar</button>
+      </div>
+
+      {standings.length === 0 ? (
+        <div className="empty"><div className="big">📅</div><p>Esta temporada aún no tiene torneos.<br/>Agrégala al crear un nuevo torneo.</p></div>
+      ) : (
+        <React.Fragment>
+          <div className="section-title">Tabla acumulada</div>
+          <StandingsTable teamIds={teamIds} matches={allMatches} playersById={playersById} />
+          <button className="btn ghost sm" style={{marginTop:12}}
+            onClick={()=>shareStandingsImage(s.name, standings, playersById)}>
+            📤 Compartir tabla</button>
+
+          {scorers.length > 0 && (
+            <React.Fragment>
+              <div className="section-title">Goleadores de la temporada</div>
+              {scorers.map((x,i) => (
+                <div className="mrow" key={x.p.id} style={{gridTemplateColumns:'auto 1fr auto'}}>
+                  <span className="pos">{i+1}</span>
+                  <div className="t"><span>{x.p.emoji}</span><span className="nm">{x.p.name}</span></div>
+                  <div className="mid">{x.r.gf}</div>
+                </div>
+              ))}
+            </React.Fragment>
+          )}
+        </React.Fragment>
+      )}
+
+      <div className="section-title">Torneos incluidos</div>
+      {ts.length === 0
+        ? <p style={{fontSize:12,color:'var(--muted)'}}>Ninguno todavía.</p>
+        : ts.map(t => (
+          <div className="mrow-tag" key={t.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 4px'}}>
+            <span className="tap grow" style={{cursor:'pointer',color:'var(--text)',fontWeight:600,fontSize:13,textTransform:'none',letterSpacing:0}}
+              onClick={()=>go('#/torneo/'+t.id)}>{t.name}</span>
+            <button className="btn ghost sm" onClick={()=>removeFromSeason(t.id)}>Quitar</button>
+          </div>
+        ))}
+
+      <button className="btn danger" style={{marginTop:24}} onClick={deleteSeason}>Eliminar temporada</button>
+      {editing && <SeasonEditor season={s} onSave={saveSeason} onClose={()=>setEditing(false)} />}
     </React.Fragment>
   );
 }
@@ -1174,6 +1374,33 @@ function PlayerDetail({ id, db, update, playersById, clubsById }) {
             const label = s.type==='g' ? `🔥 ${s.streak} victorias seguidas` : s.type==='p' ? `${s.streak} derrotas seguidas` : `${s.streak} empates seguidos`;
             return <div className="streak-pill" style={{marginBottom:12}}>{label}</div>;
           })()}
+
+          {(() => {
+            const { ratings, history } = computeElo(db.players, db.tournaments);
+            const elo = ratings[id];
+            const hist = history[id];
+            const delta = elo - ELO_BASE;
+            const rank = eloRanking(db.players, db.tournaments);
+            const pos = rank.findIndex(x => x.p.id === id) + 1;
+            return (
+              <div className="card">
+                <div className="row">
+                  <div className="grow">
+                    <div className="eyebrow">🏅 Rating ELO</div>
+                    <div className="display" style={{fontSize:32,color:'var(--volt)'}}>{elo}</div>
+                    <div style={{fontSize:12,color: delta>=0?'var(--volt)':'var(--danger)'}}>
+                      {delta>=0?'+':''}{delta} desde el inicio</div>
+                  </div>
+                  {pos > 0 && <div style={{textAlign:'center'}}>
+                    <div className="display" style={{fontSize:22,color:'var(--muted)'}}>#{pos}</div>
+                    <div style={{fontSize:9,color:'var(--muted)',letterSpacing:'.08em'}}>DEL GRUPO</div>
+                  </div>}
+                </div>
+                {hist.length >= 4 && <EloTrend history={hist} />}
+              </div>
+            );
+          })()}
+
           <div className="big-stat-row">
             <div className="big-stat"><div className="n">{r.pj}</div><div className="l">Jugados</div></div>
             <div className="big-stat"><div className="n">{Math.round(r.g/r.pj*100)}%</div><div className="l">Victorias</div></div>
@@ -1263,8 +1490,8 @@ function PlayerDetail({ id, db, update, playersById, clubsById }) {
 /* ============ JUGADORES & CLUBES ============ */
 function PlayersView({ db, update, notifyDelete }) {
   const [editing, setEditing] = useState(null);
-  const [dialog, setDialog] = useState(null);
   const fileRef = useRef(null);
+  const eloById = useMemo(() => computeElo(db.players, db.tournaments).ratings, [db.players, db.tournaments]);
 
   const usedIn = (pid) => db.tournaments.some(t => t.teamIds.includes(pid));
 
@@ -1319,6 +1546,7 @@ function PlayersView({ db, update, notifyDelete }) {
       )}
       {db.players.map(p => {
         const r = playerRecord(p.id, db.tournaments);
+        const elo = eloById[p.id];
         return (
           <div className="card tap" key={p.id} onClick={()=>go('#/jugador/'+p.id)}>
             <div className="row">
@@ -1328,6 +1556,10 @@ function PlayersView({ db, update, notifyDelete }) {
                 <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
                   {r.pj > 0 ? `${r.pj} PJ · ${r.g}G ${r.e}E ${r.p}P · ${r.gf}:${r.gc}` : 'Sin partidos aún'}</div>
               </div>
+              {r.pj > 0 && <div style={{textAlign:'center',marginRight:4}}>
+                <div className="display" style={{fontSize:15,color:'var(--volt)'}}>{elo}</div>
+                <div style={{fontSize:8,color:'var(--muted)',letterSpacing:'.06em'}}>ELO</div>
+              </div>}
               <button className="btn ghost sm" onClick={e=>{e.stopPropagation(); setEditing(p);}}>Editar</button>
               <button className="btn danger sm" onClick={e=>{e.stopPropagation(); removePlayer(p.id);}}>✕</button>
             </div>
@@ -1345,7 +1577,6 @@ function PlayersView({ db, update, notifyDelete }) {
       </div>
 
       {editing && <PlayerEditor player={editing} onSave={savePlayer} onClose={()=>setEditing(null)} />}
-      <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
 }
@@ -1380,7 +1611,6 @@ function PlayerEditor({ player, onSave, onClose }) {
 /* ============ FICHA DE CLUB ============ */
 function ClubDetail({ id, db, update, notifyDelete, playersById, clubsById }) {
   const [editing, setEditing] = useState(false);
-  const [dialog, setDialog] = useState(null);
   const c = clubsById[id];
   if (!c) return <div className="empty"><div className="big">🤷</div>Club no encontrado</div>;
   const r = clubRecord(id, db.tournaments);
@@ -1399,12 +1629,12 @@ function ClubDetail({ id, db, update, notifyDelete, playersById, clubsById }) {
     update(d => { const i = d.clubs.findIndex(x => x.id === club.id); d.clubs[i] = club; return d; });
     setEditing(false);
   };
-  const deleteClub = (cid) => {
-    setDialog({ message:`¿Eliminar el club ${c.name}? Los partidos ya jugados lo dejarán de mostrar.`,
-      danger:true, confirmLabel:'Eliminar', onConfirm: () => {
-        notifyDelete(`${c.name} eliminado`, d => { d.clubs = d.clubs.filter(x => x.id !== cid); return d; });
-        go('#/clubes');
-      }});
+  const deleteClub = async (cid) => {
+    if (await uiConfirm(`¿Eliminar el club ${c.name}? Los partidos ya jugados lo dejarán de mostrar.`,
+      { destructive:true, okLabel:'Eliminar' })) {
+      notifyDelete(`${c.name} eliminado`, d => { d.clubs = d.clubs.filter(x => x.id !== cid); return d; });
+      go('#/clubes');
+    }
   };
 
   return (
@@ -1466,7 +1696,6 @@ function ClubDetail({ id, db, update, notifyDelete, playersById, clubsById }) {
 
       <button className="btn danger" style={{marginTop:20}} onClick={()=>deleteClub(id)}>Eliminar club</button>
       {editing && <ClubEditor club={c} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditing(false)} />}
-      <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
 }
@@ -1474,7 +1703,6 @@ function ClubDetail({ id, db, update, notifyDelete, playersById, clubsById }) {
 /* ============ CLUBES (vista con estadísticas) ============ */
 function ClubsView({ db, update, notifyDelete }) {
   const [editingClub, setEditingClub] = useState(null);
-  const [dialog, setDialog] = useState(null);
   const [catQ, setCatQ] = useState('');
   const myNames = new Set(db.clubs.map(c => c.name.toLowerCase()));
   const q = catQ.trim().toLowerCase();
@@ -1489,13 +1717,13 @@ function ClubsView({ db, update, notifyDelete }) {
     });
     setEditingClub(null);
   };
-  const deleteClub = (id) => {
+  const deleteClub = async (id) => {
     const name = db.clubs.find(c => c.id === id)?.name;
-    setDialog({ message:`¿Eliminar el club ${name}? Los partidos ya jugados lo dejarán de mostrar.`,
-      danger:true, confirmLabel:'Eliminar', onConfirm: () => {
-        notifyDelete(`${name} eliminado`, d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
-        setEditingClub(null);
-      }});
+    if (await uiConfirm(`¿Eliminar el club ${name}? Los partidos ya jugados lo dejarán de mostrar.`,
+      { destructive:true, okLabel:'Eliminar' })) {
+      notifyDelete(`${name} eliminado`, d => { d.clubs = d.clubs.filter(c => c.id !== id); return d; });
+      setEditingClub(null);
+    }
   };
 
   const withStats = db.clubs.map(c => ({ ...c, r: clubRecord(c.id, db.tournaments) }))
@@ -1553,7 +1781,6 @@ function ClubsView({ db, update, notifyDelete }) {
       </div>
 
       {editingClub && <ClubEditor club={editingClub} onSave={saveClub} onDelete={deleteClub} onClose={()=>setEditingClub(null)} />}
-      <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
 }
@@ -1597,6 +1824,7 @@ function NewTournament({ db, update }) {
   const [idaVuelta, setIdaVuelta] = useState(false);
   const [numGroups, setNumGroups] = useState(2);
   const [fixtureMode, setFixtureMode] = useState('sorteo');
+  const [seasonId, setSeasonId] = useState('');
 
   const toggle = (id) => setSelected(s => s.includes(id) ? s.filter(x=>x!==id) : [...s, id]);
   const min = format === 'grupos' ? numGroups * 2 : 2;
@@ -1605,6 +1833,7 @@ function NewTournament({ db, update }) {
   const create = () => {
     const manual = format === 'liga' && fixtureMode === 'manual';
     const t = buildTournament({ name: name.trim(), format, teamIds: selected, idaVuelta, numGroups, fixtureMode });
+    t.seasonId = seasonId || null;
     update(d => { d.tournaments.push(t); return d; });
     go('#/torneo/' + t.id);
   };
@@ -1672,6 +1901,15 @@ function NewTournament({ db, update }) {
           ))}
         </div>
       </div>
+      {db.seasons.length > 0 && (
+        <div className="field">
+          <label>Temporada (opcional)</label>
+          <select value={seasonId} onChange={e=>setSeasonId(e.target.value)}>
+            <option value="">— Torneo suelto —</option>
+            {db.seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      )}
       <button className="btn primary" disabled={!valid} onClick={create}>
         {format==='liga'&&fixtureMode==='manual' ? '✍️ Crear liga libre' : '🎲 Sortear y crear torneo'}</button>
     </React.Fragment>
@@ -1686,7 +1924,6 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
   const [tab, setTab] = useState(isKO ? 'bracket' : 'partidos');
   const [editMatch, setEditMatch] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [dialog, setDialog] = useState(null);
 
   const addClub = (club) => {
     const existing = db.clubs.find(c => c.name.toLowerCase() === club.name.toLowerCase());
@@ -1835,7 +2072,20 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
           🏆 Finalizar y coronar al líder</button>
       )}
 
-      <div className="row" style={{marginTop:24}}>
+      <div className="field" style={{marginTop:24}}>
+        <label>Temporada</label>
+        <select value={t.seasonId || ''} onChange={e=>{
+          const val = e.target.value || null;
+          update(d => { const tt = d.tournaments.find(x=>x.id===t.id); tt.seasonId = val; return d; });
+        }}>
+          <option value="">— Torneo suelto —</option>
+          {db.seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        {db.seasons.length === 0 && <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+          Crea una temporada desde Torneos → 📅 Temporadas para agrupar varios torneos en una tabla acumulada.</p>}
+      </div>
+
+      <div className="row">
         <button className="btn ghost sm" style={{flex:1}} onClick={duplicateTournament}>🎲 Duplicar torneo</button>
         <button className="btn danger sm" style={{flex:1}} onClick={removeTournament}>Eliminar torneo</button>
       </div>
@@ -1844,7 +2094,6 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
         onSave={saveResult} onDelete={manual ? deleteMatch : null} onClose={()=>setEditMatch(null)} />}
       {adding && <AddMatchSheet t={t} playersById={playersById} clubs={db.clubs} onAddClub={addClub}
         onSave={addManualMatch} onClose={()=>setAdding(false)} />}
-      <Dialog d={dialog} onClose={()=>setDialog(null)} />
     </React.Fragment>
   );
 }
