@@ -1,5 +1,6 @@
-const CACHE = 'fifa-torneos-v1';
-const ASSETS = ['./index.html', './manifest.json'];
+const CACHE = 'fifa-torneos-v2';
+const ASSETS = ['./index.html', './manifest.json',
+  './icon-192.png', './icon-512.png', './icon-512-maskable.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
@@ -14,6 +15,7 @@ self.addEventListener('activate', e => {
 
 // Network first, cache fallback (para que actualizaciones lleguen al tiro)
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request).then(res => {
       const copy = res.clone();
