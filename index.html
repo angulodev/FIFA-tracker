@@ -806,7 +806,7 @@ function PlayerTag({ id, playersById, club, right }) {
   if (!p) return <span className="nm" style={{color:'var(--muted)',fontStyle:'italic'}}>Por definir</span>;
   const label = (
     <span className="nm">{p.name}
-      {club && <span className="pname"> · <ClubBadge name={club.name} logo={club.logo} flag={club.flag} size={13} /> {club.name}</span>}
+      {club && <span className="pname"> · <ClubBadge name={club.name} logo={club.logo} flag={club.flag} size={13} />{clubLabel(club) && ' '+clubLabel(club)}</span>}
     </span>
   );
   return right
@@ -820,6 +820,20 @@ function clubHue(name) {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
   return h;
 }
+function clubInitials(name) {
+  const words = name.replace(/[^A-Za-zÀ-ÿ0-9 ]/g, '').split(/\s+/).filter(Boolean);
+  return (words.length === 1 ? words[0].slice(0, 3)
+    : words.map(w => w[0]).join('').slice(0, 3)).toUpperCase();
+}
+// Nombre corto para espacios angostos (filas de partido): si el club tiene escudo
+// o bandera real, el badge ya es una imagen distinta al texto, así que el texto
+// puede acortarse a iniciales sin problema. Si el badge YA ES solo iniciales
+// (sin logo), no repetimos las mismas iniciales como texto (se vería "PS PS").
+function clubLabel(club, max = 10) {
+  if (!club) return '';
+  if (club.name.length <= max) return club.name;
+  return (club.logo || club.flag) ? clubInitials(club.name) : '';
+}
 function ClubBadge({ name, logo, flag, size = 16 }) {
   const [failed, setFailed] = useState(false);
   if (!name) return null;
@@ -830,9 +844,7 @@ function ClubBadge({ name, logo, flag, size = 16 }) {
     return <img className="clogo" src={logo} alt={name} loading="lazy"
       style={{ width: size + 4, height: size + 4 }} onError={()=>setFailed(true)} />;
   }
-  const words = name.replace(/[^A-Za-zÀ-ÿ0-9 ]/g, '').split(/\s+/).filter(Boolean);
-  const initials = (words.length === 1 ? words[0].slice(0, 3)
-    : words.map(w => w[0]).join('').slice(0, 3)).toUpperCase();
+  const initials = clubInitials(name);
   const hue = clubHue(name);
   return (
     <span className="cbadge" style={{ width: size, height: size, fontSize: Math.round(size * 0.42),
@@ -2256,7 +2268,7 @@ function BSlot({ id, m, g, club, win, playersById }) {
   const p = id ? playersById[id] : null;
   return (
     <div className={'b-slot'+(win?' win':'')+(p?'':' tbd')}>
-      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · <ClubBadge name={club.name} logo={club.logo} flag={club.flag} size={13} /> {club.name}</span>}</span></React.Fragment> : 'Por definir'}
+      {p ? <React.Fragment><span>{p.emoji}</span><span>{p.name}{club && <span className="pname"> · <ClubBadge name={club.name} logo={club.logo} flag={club.flag} size={13} />{clubLabel(club) && ' '+clubLabel(club)}</span>}</span></React.Fragment> : 'Por definir'}
       {m.played && !m.bye && <span className="g">{g}</span>}
     </div>
   );
