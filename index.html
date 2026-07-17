@@ -248,6 +248,25 @@ input,select{font-family:inherit;font-size:16px}
 .undo-toast span{font-size:13px;color:var(--text)}
 .undo-toast button{color:var(--volt);font-weight:700;font-size:13px;white-space:nowrap}
 
+/* Ruleta de clubes */
+.dice-btn{margin-top:6px;padding:0 12px;background:var(--surface2);border:1px solid var(--line);
+  border-radius:10px;font-size:18px;flex:none}
+.dice-btn:active{background:var(--volt)}
+
+/* Modo noche de juego */
+.gn .sb-score-num{font-family:'Anton';font-size:88px;color:var(--volt);
+  text-shadow:0 0 32px rgba(200,241,53,.45);text-align:center;line-height:1}
+.gn .stepper .ctrl button{width:64px;height:56px;font-size:26px}
+.gn-progress{display:flex;gap:5px;margin:10px 0 16px}
+.gn-progress .dot{flex:1;height:4px;border-radius:2px;background:var(--surface2)}
+.gn-progress .dot.done{background:var(--volt)}
+.gn-progress .dot.now{background:var(--volt-dim)}
+.gn-saved{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(11,20,14,.85);z-index:90;animation:fadeIn .15s ease}
+.gn-saved .inner{text-align:center}
+.gn-saved .big{font-size:64px}
+.gn-saved .txt{font-family:'Anton';font-size:22px;color:var(--volt);margin-top:8px;letter-spacing:.04em}
+
 /* Ficha de club */
 .back-btn{color:var(--volt);font-size:13px;font-weight:700;margin-bottom:10px;display:inline-block}
 .hbar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -643,6 +662,43 @@ function qualifiersOrdered(groups, matches, advancePerGroup, teamsById) {
   return ordered.filter(Boolean);
 }
 
+// Agrega un jugador a una liga EN CURSO. Los partidos ya jugados no se tocan;
+// se generan los cruces del nuevo jugador contra todos los demás, repartidos
+// en fechas nuevas al final del fixture (ida, y vuelta si corresponde).
+// Solo para formato liga: en eliminatoria o grupos el cuadro ya está cerrado.
+function addPlayerToLeague(tt, playerId) {
+  if (tt.format !== 'liga' || tt.teamIds.includes(playerId)) return false;
+  const rivals = [...tt.teamIds];
+  tt.teamIds.push(playerId);
+  if (tt.config.fixtureMode === 'manual') return true; // liga libre: sin fixture que generar
+  let round = tt.matches.reduce((mx, m) => Math.max(mx, m.round || 0), 0);
+  const mk = (a, b) => ({ id: uid(), stage:'liga', group:null, round: ++round,
+    teamA:a, teamB:b, golesA:null, golesB:null, penA:null, penB:null,
+    clubA:null, clubB:null, played:false });
+  rivals.forEach(op => tt.matches.push(mk(playerId, op)));
+  if (tt.config.idaVuelta) rivals.forEach(op => tt.matches.push(mk(op, playerId)));
+  return true;
+}
+
+// Aplica un resultado a un partido de un torneo (muta tt). Maneja KO: limpia
+// rondas posteriores si se edita, avanza al ganador y corona campeón en la final.
+function applyMatchResult(tt, matchId, { golesA, golesB, penA, penB, clubA, clubB }) {
+  const m = tt.matches.find(x => x.id === matchId);
+  if (!m) return;
+  const wasKO = m.stage === 'ko';
+  if (wasKO && m.played) clearDownstream(tt.matches, m);
+  m.golesA = golesA; m.golesB = golesB;
+  m.penA = penA; m.penB = penB;
+  m.clubA = clubA; m.clubB = clubB;
+  m.played = true; m.playedAt = Date.now();
+  if (wasKO) {
+    const w = koWinner(m);
+    const wasFinal = advanceWinner(tt.matches, m, w);
+    if (wasFinal) { tt.champion = w; tt.status = 'finalizado'; }
+    else if (tt.status === 'finalizado') { tt.status = 'activo'; tt.champion = null; }
+  }
+}
+
 // Construye un torneo nuevo (fixture/llaves/grupos) a partir de config. Pura: no toca localStorage.
 function buildTournament({ name, format, teamIds, idaVuelta = false, numGroups = 2, fixtureMode = 'sorteo' }) {
   const manual = format === 'liga' && fixtureMode === 'manual';
@@ -761,6 +817,12 @@ function App() {
     tab = 'clubes';
   } else if (hash === '#/torneos') {
     screen = <TournamentsList db={db} playersById={playersById} />; tab = 'torneos';
+  } else if (hash.startsWith('#/juego/')) {
+    const id = hash.split('/')[2];
+    const t = db.tournaments.find(x => x.id === id);
+    screen = t ? <GameNight key={id} t={t} db={db} update={update} playersById={playersById} clubsById={clubsById} />
+               : <div className="empty"><div className="big">🤷</div>Torneo no encontrado</div>;
+    tab = 'torneos';
   } else if (hash === '#/temporadas') {
     screen = <SeasonsList db={db} update={update} notifyDelete={notifyDelete} playersById={playersById} />; tab = 'torneos';
   } else if (hash.startsWith('#/temporada/')) {
@@ -1938,6 +2000,210 @@ function NewTournament({ db, update }) {
   );
 }
 
+/* ============ MODO NOCHE DE JUEGO ============ */
+function GameNight({ t, db, update, playersById, clubsById }) {
+  const manual = t.config.fixtureMode === 'manual';
+  // Partidos jugables ahora: pendientes con ambos jugadores definidos (incluye KO listos)
+  const pending = t.matches.filter(m => !m.played && m.teamA && m.teamB);
+  const played = t.matches.filter(m => m.played && !m.bye).length;
+  const total = t.matches.filter(m => !m.bye).length;
+
+  const [current, setCurrent] = useState(pending[0] || null);
+  const [pA, setPA] = useState(null);
+  const [pB, setPB] = useState(null);
+  const [gA, setGA] = useState(0);
+  const [gB, setGB] = useState(0);
+  const [penA, setPenA] = useState(0);
+  const [penB, setPenB] = useState(0);
+  const [cA, setCA] = useState(null);
+  const [cB, setCB] = useState(null);
+  const [saved, setSaved] = useState(null); // texto del flash "guardado"
+
+  const reset = () => { setGA(0); setGB(0); setPenA(0); setPenB(0); setCA(null); setCB(null); setPA(null); setPB(null); };
+
+  const addClub = (club) => {
+    const existing = db.clubs.find(c => c.name.toLowerCase() === club.name.toLowerCase());
+    if (existing) return existing.id;
+    const id = uid();
+    update(d => { d.clubs.push({ id, name: club.name, logo: club.logo || null, flag: club.flag || null }); return d; });
+    return id;
+  };
+
+  const isKO = current && current.stage === 'ko';
+  const needsPens = isKO && gA === gB;
+  const pensValid = !needsPens || penA !== penB;
+
+  const flash = (msg, then) => {
+    setSaved(msg);
+    setTimeout(() => { setSaved(null); then && then(); }, 900);
+  };
+
+  const saveFixtureMatch = () => {
+    const matchId = current.id;
+    update(d => {
+      const tt = d.tournaments.find(x => x.id === t.id);
+      applyMatchResult(tt, matchId, { golesA: gA, golesB: gB,
+        penA: needsPens ? penA : null, penB: needsPens ? penB : null, clubA: cA, clubB: cB });
+      return d;
+    });
+    flash('¡Guardado!', () => {
+      reset();
+      // recomputar pendientes desde el estado más fresco vía location reload de current:
+      // el componente se re-renderiza con t actualizado; tomamos el siguiente en el efecto de abajo.
+      setCurrent('NEXT');
+    });
+  };
+
+  // Cuando current === 'NEXT', elegir el siguiente pendiente del t ya actualizado
+  useEffect(() => {
+    if (current === 'NEXT') {
+      const next = t.matches.filter(m => !m.played && m.teamA && m.teamB)[0] || null;
+      setCurrent(next);
+    }
+  }, [current, t]);
+
+  const saveManualMatch = () => {
+    update(d => {
+      const tt = d.tournaments.find(x => x.id === t.id);
+      tt.matches.push({ id: uid(), stage:'liga', group:null, round: tt.matches.length + 1,
+        teamA: pA, teamB: pB, golesA: gA, golesB: gB, clubA: cA, clubB: cB,
+        played: true, playedAt: Date.now() });
+      return d;
+    });
+    flash('¡Guardado!', reset);
+  };
+
+  const A = manual ? (pA && playersById[pA]) : (current && current !== 'NEXT' && playersById[current.teamA]);
+  const B = manual ? (pB && playersById[pB]) : (current && current !== 'NEXT' && playersById[current.teamB]);
+  const readyToScore = manual ? (pA && pB) : (current && current !== 'NEXT');
+
+  const PlayerPick = ({ value, onChange, exclude }) => (
+    <div className="chips" style={{justifyContent:'center'}}>
+      {t.teamIds.filter(id => id !== exclude).map(id => (
+        <button key={id} className={'chip'+(value===id?' on':'')} onClick={()=>onChange(id)}>
+          {playersById[id]?.emoji} {playersById[id]?.name}</button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="gn">
+      <div className="row" style={{marginBottom:4}}>
+        <div className="grow">
+          <div className="eyebrow">🎮 Modo juego</div>
+          <h2 className="display" style={{fontSize:20}}>{t.name}</h2>
+        </div>
+        <button className="btn ghost sm" onClick={()=>go('#/torneo/'+t.id)}>Salir</button>
+      </div>
+
+      {!manual && total > 0 && (
+        <div className="gn-progress">
+          {t.matches.filter(m=>!m.bye).map((m,i) => (
+            <div key={m.id} className={'dot'+(m.played?' done':(current&&current!=='NEXT'&&current.id===m.id?' now':''))} />
+          ))}
+        </div>
+      )}
+      {!manual && <p style={{fontSize:12,color:'var(--muted)',marginBottom:12}}>
+        {played} de {total} partidos jugados{pending.length>0 ? ` · quedan ${pending.length}` : ''}</p>}
+
+      {manual && !readyToScore && (
+        <React.Fragment>
+          <div className="field">
+            <label>¿Quién juega?</label>
+            <PlayerPick value={pA} onChange={setPA} exclude={pB} />
+          </div>
+          <div className="field">
+            <label>¿Contra quién?</label>
+            <PlayerPick value={pB} onChange={setPB} exclude={pA} />
+          </div>
+        </React.Fragment>
+      )}
+
+      {!manual && !readyToScore && (
+        <div className="empty">
+          <div className="big">🏁</div>
+          <p>¡No quedan partidos pendientes!<br/>Vuelve al torneo para ver la tabla{t.format!=='liga'?' y las llaves':''}.</p>
+          <button className="btn primary" style={{marginTop:14}} onClick={()=>go('#/torneo/'+t.id)}>Ver torneo</button>
+        </div>
+      )}
+
+      {readyToScore && (
+        <React.Fragment>
+          {!manual && current.stage==='ko' && <div className="sb-meta">Partido eliminatorio</div>}
+          <div className="scoreboard">
+            <div className="sb-teams">
+              <div className="sb-team">
+                <div className="shield" style={{fontSize:44}}>{A?.emoji}</div>
+                <div className="name" style={{fontSize:15}}>{A?.name}</div>
+                <ClubField value={cA} onChange={setCA} clubs={db.clubs} onAddClub={addClub} dice />
+                <div className="stepper" style={{marginTop:12}}>
+                  <div className="sb-score-num">{gA}</div>
+                  <div className="ctrl">
+                    <button onClick={()=>setGA(g=>Math.max(0,g-1))}>−</button>
+                    <button onClick={()=>setGA(g=>g+1)}>+</button>
+                  </div>
+                </div>
+              </div>
+              <div className="sb-vs">VS</div>
+              <div className="sb-team">
+                <div className="shield" style={{fontSize:44}}>{B?.emoji}</div>
+                <div className="name" style={{fontSize:15}}>{B?.name}</div>
+                <ClubField value={cB} onChange={setCB} clubs={db.clubs} onAddClub={addClub} dice />
+                <div className="stepper" style={{marginTop:12}}>
+                  <div className="sb-score-num">{gB}</div>
+                  <div className="ctrl">
+                    <button onClick={()=>setGB(g=>Math.max(0,g-1))}>−</button>
+                    <button onClick={()=>setGB(g=>g+1)}>+</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {needsPens && (
+            <div className="card" style={{marginTop:12,borderColor:'var(--gold)'}}>
+              <div className="eyebrow" style={{color:'var(--gold)'}}>⚡ Empate — definición a penales</div>
+              <div className="sb-teams">
+                <div className="stepper">
+                  <div className="val" style={{fontSize:36,color:'var(--gold)'}}>{penA}</div>
+                  <div className="ctrl">
+                    <button onClick={()=>setPenA(p=>Math.max(0,p-1))}>−</button>
+                    <button onClick={()=>setPenA(p=>p+1)}>+</button>
+                  </div>
+                </div>
+                <div className="sb-vs" style={{fontSize:14}}>PEN</div>
+                <div className="stepper">
+                  <div className="val" style={{fontSize:36,color:'var(--gold)'}}>{penB}</div>
+                  <div className="ctrl">
+                    <button onClick={()=>setPenB(p=>Math.max(0,p-1))}>−</button>
+                    <button onClick={()=>setPenB(p=>p+1)}>+</button>
+                  </div>
+                </div>
+              </div>
+              {!pensValid && <p style={{fontSize:12,color:'var(--danger)',textAlign:'center',marginTop:8}}>
+                Los penales no pueden terminar empatados.</p>}
+            </div>
+          )}
+
+          <button className="btn primary" style={{marginTop:16,padding:18,fontSize:17}} disabled={!pensValid}
+            onClick={manual ? saveManualMatch : saveFixtureMatch}>
+            ✅ Guardar {manual || pending.length<=1 ? '' : 'y siguiente partido'}</button>
+          {manual && <button className="btn ghost sm" style={{marginTop:10}} onClick={reset}>Cambiar jugadores</button>}
+        </React.Fragment>
+      )}
+
+      {saved && (
+        <div className="gn-saved">
+          <div className="inner">
+            <div className="big">⚽</div>
+            <div className="txt">{saved}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ============ VISTA DE TORNEO ============ */
 function TournamentView({ t, db, update, notifyDelete, playersById, clubsById }) {
   const isKO = t.format === 'eliminatoria';
@@ -1946,6 +2212,25 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
   const [tab, setTab] = useState(isKO ? 'bracket' : 'partidos');
   const [editMatch, setEditMatch] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [addingPlayer, setAddingPlayer] = useState(false);
+
+  const addPlayerToTournament = async (pid) => {
+    const p = playersById[pid];
+    const isSorteo = t.config.fixtureMode !== 'manual';
+    const perRival = t.config.idaVuelta ? 2 : 1;
+    const newMatches = isSorteo ? t.teamIds.length * perRival : 0;
+    const msg = isSorteo
+      ? `¿Sumar a ${p.name} al torneo? Se agregarán ${newMatches} partidos nuevos (contra cada rival) en fechas al final del fixture.`
+      : `¿Sumar a ${p.name} al torneo? Podrás registrar sus partidos como siempre.`;
+    if (await uiConfirm(msg, { okLabel:'Sumar jugador' })) {
+      update(d => {
+        const tt = d.tournaments.find(x => x.id === t.id);
+        addPlayerToLeague(tt, pid);
+        return d;
+      });
+      setAddingPlayer(false);
+    }
+  };
 
   const addClub = (club) => {
     const existing = db.clubs.find(c => c.name.toLowerCase() === club.name.toLowerCase());
@@ -1960,19 +2245,7 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
   const saveResult = (matchId, golesA, golesB, penA, penB, clubA, clubB) => {
     update(d => {
       const tt = d.tournaments.find(x => x.id === t.id);
-      const m = tt.matches.find(x => x.id === matchId);
-      const wasKO = m.stage === 'ko';
-      if (wasKO && m.played) clearDownstream(tt.matches, m);
-      m.golesA = golesA; m.golesB = golesB;
-      m.penA = penA; m.penB = penB;
-      m.clubA = clubA; m.clubB = clubB;
-      m.played = true; m.playedAt = Date.now();
-      if (wasKO) {
-        const w = koWinner(m);
-        const wasFinal = advanceWinner(tt.matches, m, w);
-        if (wasFinal) { tt.champion = w; tt.status = 'finalizado'; }
-        else if (tt.status === 'finalizado') { tt.status = 'activo'; tt.champion = null; }
-      }
+      applyMatchResult(tt, matchId, { golesA, golesB, penA, penB, clubA, clubB });
       return d;
     });
     setEditMatch(null);
@@ -2066,8 +2339,12 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
         </div>
       )}
 
+      {t.status==='activo' && (
+        <button className="btn primary" style={{marginBottom:14}} onClick={()=>go('#/juego/'+t.id)}>
+          🎮 Modo juego</button>
+      )}
       {tab==='partidos' && manual && t.status==='activo' && (
-        <button className="btn primary" style={{marginBottom:14}} onClick={()=>setAdding(true)}>
+        <button className="btn ghost" style={{marginBottom:14}} onClick={()=>setAdding(true)}>
           + Registrar partido</button>
       )}
       {tab==='partidos' && <MatchList t={t} playersById={playersById} clubsById={clubsById}
@@ -2094,7 +2371,12 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
           🏆 Finalizar y coronar al líder</button>
       )}
 
-      <div className="field" style={{marginTop:24}}>
+      {t.format === 'liga' && t.status === 'activo' && (
+        <button className="btn ghost" style={{marginTop:24}} onClick={()=>setAddingPlayer(true)}>
+          ➕ Sumar jugador al torneo</button>
+      )}
+
+      <div className="field" style={{marginTop: t.format==='liga'&&t.status==='activo' ? 14 : 24}}>
         <label>Temporada</label>
         <select value={t.seasonId || ''} onChange={e=>{
           const val = e.target.value || null;
@@ -2111,6 +2393,38 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
         <button className="btn ghost sm" style={{flex:1}} onClick={duplicateTournament}>🎲 Duplicar torneo</button>
         <button className="btn danger sm" style={{flex:1}} onClick={removeTournament}>Eliminar torneo</button>
       </div>
+
+      {addingPlayer && (
+        <div className="overlay" onClick={()=>setAddingPlayer(false)}>
+          <div className="sheet" onClick={e=>e.stopPropagation()}>
+            <div className="sheet-grab" />
+            <h2 className="display">Sumar jugador</h2>
+            {(() => {
+              const candidates = db.players.filter(p => !t.teamIds.includes(p.id));
+              if (candidates.length === 0) return (
+                <div className="empty" style={{padding:'18px 10px'}}>
+                  <p>Todos tus jugadores ya están en este torneo.<br/>Crea al nuevo primero en la pestaña Jugadores.</p>
+                  <button className="btn ghost sm" style={{marginTop:10}} onClick={()=>go('#/jugadores')}>Ir a Jugadores</button>
+                </div>
+              );
+              return (
+                <React.Fragment>
+                  <p style={{fontSize:12.5,color:'var(--muted)',marginBottom:12}}>
+                    {t.config.fixtureMode==='manual'
+                      ? 'Se sumará a la tabla y podrás registrar sus partidos como siempre.'
+                      : 'Se generarán sus partidos contra cada rival, en fechas nuevas al final del fixture. Lo ya jugado no se toca.'}</p>
+                  <div className="chips">
+                    {candidates.map(p => (
+                      <button key={p.id} className="chip" onClick={()=>addPlayerToTournament(p.id)}>
+                        {p.emoji} {p.name}</button>
+                    ))}
+                  </div>
+                </React.Fragment>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {editMatch && <ScoreEditor match={editMatch} playersById={playersById} clubsById={clubsById} clubs={db.clubs} onAddClub={addClub}
         onSave={saveResult} onDelete={manual ? deleteMatch : null} onClose={()=>setEditMatch(null)} />}
@@ -2277,13 +2591,49 @@ function BSlot({ id, m, g, club, win, playersById }) {
 }
 
 /* ============ SELECTOR DE CLUB ============ */
-function ClubField({ value, onChange, clubs, onAddClub }) {
+function ClubField({ value, onChange, clubs, onAddClub, dice }) {
   const [open, setOpen] = useState(false);
+  const [spin, setSpin] = useState(null); // nombre mostrado durante el giro
+  const spinRef = useRef(false);
+  useEffect(() => () => { spinRef.current = false; }, []);
   const current = clubs.find(c => c.id === value);
+
+  const rollDice = () => {
+    if (spinRef.current) return;
+    const myNames = new Set(clubs.map(c => c.name.toLowerCase()));
+    const pool = [...clubs, ...CLUB_CATALOG.filter(c => !myNames.has(c.name.toLowerCase()))];
+    if (pool.length === 0) return;
+    spinRef.current = true;
+    const seq = Array.from({ length: 14 }, () => pool[Math.floor(Math.random() * pool.length)]);
+    let i = 0;
+    const tick = () => {
+      if (!spinRef.current) return;
+      setSpin(seq[i].name);
+      i++;
+      if (i < seq.length) {
+        setTimeout(tick, 60 + i * 12); // desacelera como ruleta real
+      } else {
+        const winner = seq[seq.length - 1];
+        const existing = clubs.find(c => c.name.toLowerCase() === winner.name.toLowerCase());
+        const id = existing ? existing.id : onAddClub(winner);
+        onChange(id);
+        setSpin(null);
+        spinRef.current = false;
+      }
+    };
+    tick();
+  };
+
   return (
     <React.Fragment>
-      <button className={'club-btn'+(current?' set':'')} onClick={()=>setOpen(true)}>
-        {current ? <React.Fragment><ClubBadge name={current.name} logo={current.logo} flag={current.flag} size={18} /> {current.name}</React.Fragment> : '¿Con qué club?'}</button>
+      <div style={{display:'flex', gap:6, alignItems:'stretch'}}>
+        <button className={'club-btn'+(current||spin?' set':'')} style={{flex:1, marginTop:6}}
+          onClick={()=>!spin && setOpen(true)}>
+          {spin ? <React.Fragment>🎲 {spin}</React.Fragment>
+            : current ? <React.Fragment><ClubBadge name={current.name} logo={current.logo} flag={current.flag} size={18} /> {current.name}</React.Fragment>
+            : '¿Con qué club?'}</button>
+        {dice && <button className="dice-btn" onClick={rollDice} title="Sortear club al azar">🎲</button>}
+      </div>
       {open && <ClubSheet clubs={clubs} value={value} onAddClub={onAddClub}
         onPick={id=>{ onChange(id); setOpen(false); }} onClose={()=>setOpen(false)} />}
     </React.Fragment>
@@ -2356,12 +2706,12 @@ function ScoreEditor({ match, playersById, clubsById, clubs, onAddClub, onSave, 
             <div className="sb-team">
               <div className="shield">{A?.emoji}</div>
               <div className="name">{A?.name}</div>
-              <ClubField value={cA} onChange={setCA} clubs={clubs} onAddClub={onAddClub} />
+              <ClubField value={cA} onChange={setCA} clubs={clubs} onAddClub={onAddClub} dice />
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gA}</div>
                 <div className="ctrl">
-                  <button onClick={()=>setGA(Math.max(0,gA-1))}>−</button>
-                  <button onClick={()=>setGA(gA+1)}>+</button>
+                  <button onClick={()=>setGA(g=>Math.max(0,g-1))}>−</button>
+                  <button onClick={()=>setGA(g=>g+1)}>+</button>
                 </div>
               </div>
             </div>
@@ -2369,12 +2719,12 @@ function ScoreEditor({ match, playersById, clubsById, clubs, onAddClub, onSave, 
             <div className="sb-team">
               <div className="shield">{B?.emoji}</div>
               <div className="name">{B?.name}</div>
-              <ClubField value={cB} onChange={setCB} clubs={clubs} onAddClub={onAddClub} />
+              <ClubField value={cB} onChange={setCB} clubs={clubs} onAddClub={onAddClub} dice />
               <div className="stepper" style={{marginTop:10}}>
                 <div className="val">{gB}</div>
                 <div className="ctrl">
-                  <button onClick={()=>setGB(Math.max(0,gB-1))}>−</button>
-                  <button onClick={()=>setGB(gB+1)}>+</button>
+                  <button onClick={()=>setGB(g=>Math.max(0,g-1))}>−</button>
+                  <button onClick={()=>setGB(g=>g+1)}>+</button>
                 </div>
               </div>
             </div>
@@ -2388,16 +2738,16 @@ function ScoreEditor({ match, playersById, clubsById, clubs, onAddClub, onSave, 
               <div className="stepper">
                 <div className="val" style={{fontSize:36,color:'var(--gold)'}}>{pA}</div>
                 <div className="ctrl">
-                  <button onClick={()=>setPA(Math.max(0,pA-1))}>−</button>
-                  <button onClick={()=>setPA(pA+1)}>+</button>
+                  <button onClick={()=>setPA(p=>Math.max(0,p-1))}>−</button>
+                  <button onClick={()=>setPA(p=>p+1)}>+</button>
                 </div>
               </div>
               <div className="sb-vs" style={{fontSize:14}}>PEN</div>
               <div className="stepper">
                 <div className="val" style={{fontSize:36,color:'var(--gold)'}}>{pB}</div>
                 <div className="ctrl">
-                  <button onClick={()=>setPB(Math.max(0,pB-1))}>−</button>
-                  <button onClick={()=>setPB(pB+1)}>+</button>
+                  <button onClick={()=>setPB(p=>Math.max(0,p-1))}>−</button>
+                  <button onClick={()=>setPB(p=>p+1)}>+</button>
                 </div>
               </div>
             </div>
@@ -2473,12 +2823,12 @@ function AddMatchSheet({ t, playersById, clubs, onAddClub, onSave, onClose }) {
                 <div className="sb-team">
                   <div className="shield">{A?.emoji}</div>
                   <div className="name">{A?.name}</div>
-                  <ClubField value={cA} onChange={setCA} clubs={clubs} onAddClub={onAddClub} />
+                  <ClubField value={cA} onChange={setCA} clubs={clubs} onAddClub={onAddClub} dice />
                   <div className="stepper" style={{marginTop:10}}>
                     <div className="val">{gA}</div>
                     <div className="ctrl">
-                      <button onClick={()=>setGA(Math.max(0,gA-1))}>−</button>
-                      <button onClick={()=>setGA(gA+1)}>+</button>
+                      <button onClick={()=>setGA(g=>Math.max(0,g-1))}>−</button>
+                      <button onClick={()=>setGA(g=>g+1)}>+</button>
                     </div>
                   </div>
                 </div>
@@ -2486,12 +2836,12 @@ function AddMatchSheet({ t, playersById, clubs, onAddClub, onSave, onClose }) {
                 <div className="sb-team">
                   <div className="shield">{B?.emoji}</div>
                   <div className="name">{B?.name}</div>
-                  <ClubField value={cB} onChange={setCB} clubs={clubs} onAddClub={onAddClub} />
+                  <ClubField value={cB} onChange={setCB} clubs={clubs} onAddClub={onAddClub} dice />
                   <div className="stepper" style={{marginTop:10}}>
                     <div className="val">{gB}</div>
                     <div className="ctrl">
-                      <button onClick={()=>setGB(Math.max(0,gB-1))}>−</button>
-                      <button onClick={()=>setGB(gB+1)}>+</button>
+                      <button onClick={()=>setGB(g=>Math.max(0,g-1))}>−</button>
+                      <button onClick={()=>setGB(g=>g+1)}>+</button>
                     </div>
                   </div>
                 </div>
