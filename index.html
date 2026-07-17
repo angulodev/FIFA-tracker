@@ -323,7 +323,8 @@ const loadDB = () => {
   }
   players = players.map(p => ({ emoji: '🎮', ...p }));
   const tournaments = (d.tournaments || []).map(t => ({
-    ...t, seasonId: t.seasonId || null, config: { fixtureMode: 'sorteo', ...(t.config || {}) } }));
+    ...t, seasonId: t.seasonId || null, retired: t.retired || [],
+    config: { fixtureMode: 'sorteo', ...(t.config || {}) } }));
   // Ya no se precargan clubes: la lista arranca vacía y se completa buscando
   // en el catálogo de 207 al registrar un partido, o creando uno propio.
   let clubs = d.clubs || [];
@@ -660,6 +661,20 @@ function qualifiersOrdered(groups, matches, advancePerGroup, teamsById) {
     }
   }
   return ordered.filter(Boolean);
+}
+
+// Retira un jugador de una liga EN CURSO ("deserción"): elimina sus partidos
+// PENDIENTES (los jugados se conservan y siguen contando en la tabla) y lo
+// marca en tt.retired para mostrarlo como retirado. Devuelve cuántos
+// partidos pendientes se eliminaron, o -1 si no aplica.
+function retirePlayerFromLeague(tt, playerId) {
+  if (tt.format !== 'liga' || !tt.teamIds.includes(playerId)) return -1;
+  tt.retired = tt.retired || [];
+  if (tt.retired.includes(playerId)) return -1;
+  const before = tt.matches.length;
+  tt.matches = tt.matches.filter(m => m.played || (m.teamA !== playerId && m.teamB !== playerId));
+  tt.retired.push(playerId);
+  return before - tt.matches.length;
 }
 
 // Agrega un jugador a una liga EN CURSO. Los partidos ya jugados no se tocan;
@@ -1588,11 +1603,18 @@ function PlayersView({ db, update, notifyDelete }) {
 
 
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(db, null, 2)], { type:'application/json' });
+  const exportData = async () => {
+    const json = JSON.stringify(db, null, 2);
+    // .txt en vez de .json: WhatsApp y otras apps lo aceptan y el receptor
+    // puede descargarlo sin que el sistema lo rechace por extensión desconocida
+    const file = new File([json], 'fifa-torneos-respaldo.txt', { type:'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      try { await navigator.share({ files:[file], title:'Respaldo FIFA Torneos' }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'fifa-torneos-backup.json';
+    a.href = URL.createObjectURL(file);
+    a.download = 'fifa-torneos-respaldo.txt';
     a.click();
   };
   const importData = (e) => {
@@ -1647,9 +1669,9 @@ function PlayersView({ db, update, notifyDelete }) {
       <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
         Todos los datos viven en el almacenamiento local de este navegador. Exporta un respaldo antes de borrar datos del navegador o cambiar de dispositivo.</p>
       <div className="row">
-        <button className="btn ghost sm" style={{flex:1}} onClick={exportData}>⬇ Exportar datos</button>
+        <button className="btn ghost sm" style={{flex:1}} onClick={exportData}>📤 Compartir respaldo</button>
         <button className="btn ghost sm" style={{flex:1}} onClick={()=>fileRef.current.click()}>⬆ Importar datos</button>
-        <input type="file" accept=".json" ref={fileRef} style={{display:'none'}} onChange={importData} />
+        <input type="file" accept=".json,.txt,text/plain,application/json" ref={fileRef} style={{display:'none'}} onChange={importData} />
       </div>
 
       {editing && <PlayerEditor player={editing} onSave={savePlayer} onClose={()=>setEditing(null)} />}
@@ -2232,6 +2254,20 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
     }
   };
 
+  const retirePlayer = async (pid) => {
+    const p = playersById[pid];
+    const pendingCount = t.matches.filter(m => !m.played && (m.teamA === pid || m.teamB === pid)).length;
+    const msg = `¿Retirar a ${p.name} del torneo? Se eliminarán sus ${pendingCount} partidos pendientes. Los ya jugados se conservan y siguen contando en la tabla.`;
+    if (await uiConfirm(msg, { destructive:true, okLabel:'Retirar' })) {
+      notifyDelete(`${p.name} retirado del torneo`, d => {
+        const tt = d.tournaments.find(x => x.id === t.id);
+        retirePlayerFromLeague(tt, pid);
+        return d;
+      });
+      setAddingPlayer(false);
+    }
+  };
+
   const addClub = (club) => {
     const existing = db.clubs.find(c => c.name.toLowerCase() === club.name.toLowerCase());
     if (existing) return existing.id;
@@ -2352,7 +2388,7 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
       {tab==='tabla' && !isGroups && (
         <React.Fragment>
           <StandingsTable teamIds={t.teamIds} matches={t.matches}
-            playersById={playersById} />
+            playersById={playersById} retired={t.retired || []} />
           <button className="btn ghost sm" style={{marginTop:12}}
             onClick={()=>shareStandingsImage(t.name, computeStandings(t.teamIds, t.matches, playersById), playersById)}>
             📤 Compartir tabla</button>
@@ -2373,7 +2409,7 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
 
       {t.format === 'liga' && t.status === 'activo' && (
         <button className="btn ghost" style={{marginTop:24}} onClick={()=>setAddingPlayer(true)}>
-          ➕ Sumar jugador al torneo</button>
+          👥 Gestionar jugadores</button>
       )}
 
       <div className="field" style={{marginTop: t.format==='liga'&&t.status==='activo' ? 14 : 24}}>
@@ -2398,30 +2434,59 @@ function TournamentView({ t, db, update, notifyDelete, playersById, clubsById })
         <div className="overlay" onClick={()=>setAddingPlayer(false)}>
           <div className="sheet" onClick={e=>e.stopPropagation()}>
             <div className="sheet-grab" />
-            <h2 className="display">Sumar jugador</h2>
-            {(() => {
-              const candidates = db.players.filter(p => !t.teamIds.includes(p.id));
-              if (candidates.length === 0) return (
-                <div className="empty" style={{padding:'18px 10px'}}>
-                  <p>Todos tus jugadores ya están en este torneo.<br/>Crea al nuevo primero en la pestaña Jugadores.</p>
-                  <button className="btn ghost sm" style={{marginTop:10}} onClick={()=>go('#/jugadores')}>Ir a Jugadores</button>
-                </div>
-              );
-              return (
-                <React.Fragment>
-                  <p style={{fontSize:12.5,color:'var(--muted)',marginBottom:12}}>
-                    {t.config.fixtureMode==='manual'
-                      ? 'Se sumará a la tabla y podrás registrar sus partidos como siempre.'
-                      : 'Se generarán sus partidos contra cada rival, en fechas nuevas al final del fixture. Lo ya jugado no se toca.'}</p>
-                  <div className="chips">
-                    {candidates.map(p => (
-                      <button key={p.id} className="chip" onClick={()=>addPlayerToTournament(p.id)}>
-                        {p.emoji} {p.name}</button>
-                    ))}
-                  </div>
-                </React.Fragment>
-              );
-            })()}
+            <h2 className="display">Gestionar jugadores</h2>
+
+            <div className="field">
+              <label>➕ Sumar al torneo</label>
+              {(() => {
+                const candidates = db.players.filter(p => !t.teamIds.includes(p.id));
+                if (candidates.length === 0) return (
+                  <p style={{fontSize:12,color:'var(--muted)'}}>
+                    Todos tus jugadores ya están en este torneo. Crea al nuevo primero en la pestaña <span className="tap" style={{color:'var(--volt)',cursor:'pointer'}} onClick={()=>go('#/jugadores')}>Jugadores</span>.</p>
+                );
+                return (
+                  <React.Fragment>
+                    <p style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>
+                      {t.config.fixtureMode==='manual'
+                        ? 'Se sumará a la tabla y podrás registrar sus partidos como siempre.'
+                        : 'Se generarán sus partidos contra cada rival, en fechas nuevas al final. Lo ya jugado no se toca.'}</p>
+                    <div className="chips">
+                      {candidates.map(p => (
+                        <button key={p.id} className="chip" onClick={()=>addPlayerToTournament(p.id)}>
+                          {p.emoji} {p.name}</button>
+                      ))}
+                    </div>
+                  </React.Fragment>
+                );
+              })()}
+            </div>
+
+            <div className="field">
+              <label>🚪 Retirar del torneo</label>
+              {(() => {
+                const retirable = t.teamIds.filter(id => !(t.retired||[]).includes(id));
+                if (retirable.length <= 2) return (
+                  <p style={{fontSize:12,color:'var(--muted)'}}>
+                    Un torneo necesita al menos 2 jugadores activos.</p>
+                );
+                return (
+                  <React.Fragment>
+                    <p style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>
+                      Si alguien deserta: sus partidos pendientes se eliminan, los jugados se conservan en la tabla.</p>
+                    <div className="chips">
+                      {retirable.map(id => (
+                        <button key={id} className="chip" onClick={()=>retirePlayer(id)}>
+                          {playersById[id]?.emoji} {playersById[id]?.name}</button>
+                      ))}
+                    </div>
+                  </React.Fragment>
+                );
+              })()}
+              {(t.retired||[]).length > 0 && (
+                <p style={{fontSize:11,color:'var(--muted)',marginTop:8}}>
+                  Retirados: {(t.retired||[]).map(id=>playersById[id]?.name).filter(Boolean).join(', ')}</p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2506,7 +2571,7 @@ function MatchRow({ m, playersById, clubsById, onEdit }) {
   );
 }
 
-function StandingsTable({ teamIds, matches, playersById, qualify = 0 }) {
+function StandingsTable({ teamIds, matches, playersById, qualify = 0, retired = [] }) {
   const st = computeStandings(teamIds, matches, playersById);
   return (
     <table className="table">
@@ -2515,14 +2580,17 @@ function StandingsTable({ teamIds, matches, playersById, qualify = 0 }) {
         <th>PJ</th><th>G</th><th>E</th><th>P</th><th>DG</th><th>Pts</th>
       </tr></thead>
       <tbody>
-        {st.map((s, i) => (
-          <tr key={s.id} className={qualify && i < qualify ? 'q' : ''}>
-            <td className="tname"><span className="pos">{i+1}</span> {playersById[s.id]?.emoji} {playersById[s.id]?.name}</td>
-            <td>{s.pj}</td><td>{s.pg}</td><td>{s.pe}</td><td>{s.pp}</td>
-            <td>{s.gf - s.gc > 0 ? '+' : ''}{s.gf - s.gc}</td>
-            <td className="pts">{s.pts}</td>
-          </tr>
-        ))}
+        {st.map((s, i) => {
+          const isRetired = retired.includes(s.id);
+          return (
+            <tr key={s.id} className={qualify && i < qualify ? 'q' : ''} style={isRetired ? {opacity:.45} : {}}>
+              <td className="tname"><span className="pos">{i+1}</span> {playersById[s.id]?.emoji} {playersById[s.id]?.name}{isRetired && <span style={{fontSize:9,color:'var(--muted)',marginLeft:5}}>🚪 retiró</span>}</td>
+              <td>{s.pj}</td><td>{s.pg}</td><td>{s.pe}</td><td>{s.pp}</td>
+              <td>{s.gf - s.gc > 0 ? '+' : ''}{s.gf - s.gc}</td>
+              <td className="pts">{s.pts}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
